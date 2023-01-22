@@ -1,0 +1,8 @@
+mkdir graphs/
+mkdir results
+mkdir results/letter
+mkdir results/covertype
+mkdir results/MagicTelescope
+mkdir results/shuttle
+mkdir results/fashion
+mkdir results/adult
