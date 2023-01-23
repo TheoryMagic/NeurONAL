@@ -77,13 +77,14 @@ def train_NN_batch(model, X, Y, num_epochs=10, lr=0.001, batch_size=32):
 
     return batch_loss / num
 
-def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, test=-1, begin=0, lr=0.001):
+def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, test=1, begin=0, lr=0.001):
     data = Bandit_multi(dataset_name)
     X = data.X
     Y = data.y
 
     X = np.array(X)
     Y = np.array(Y)
+    Y = Y.astype(np.int64) - begin
     k = len(set(Y))
      
     if len(X.shape) == 3:
@@ -174,51 +175,61 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
         f.close()
 
 
-    if test >= 0:
-        current_regret = 0
+    if test > 0:
         print('-------TESTING-------')
-        for i in range(test, test+n):
-            x, y = dataset[i]
-            x = x.view(1, -1).to(device)
+        lim = min(n, len(dataset)-n)
+        for _ in range(5):
+            acc = 0
+            for i in range(n, n+lim):
+                ind = random.randint(n, len(dataset))
+                x, y = dataset[ind]
+                x = x.view(1, -1).to(device)
 
-            # creating the long vectors
-            arms = torch.zeros(k, k*x.shape[1]).to(device)
-            for w in range(k):
-                a = []
-                for j in range(0,w):
-                    a.append(ci)
-                a.append(x)
-                for j in range(w+1,k):
-                    a.append(ci)
-                arms[w]=torch.cat(a,dim=1)
+                # creating the long vectors
+                arms = torch.zeros(k, k*x.shape[1]).to(device)
+                for w in range(k):
+                    a = []
+                    for j in range(0,w):
+                        a.append(ci)
+                    a.append(x)
+                    for j in range(w+1,k):
+                        a.append(ci)
+                    arms[w]=torch.cat(a,dim=1)
 
-            #inference
-            f1 = torch.zeros(k).to(device)
-            f2 = torch.zeros(k).to(device)
-            u = torch.zeros(k).to(device)
-            dc = torch.zeros(k, explore_size).to(device)
-            for j in range(k):
-                temp = time.time()
-                f1[j], f2[j], dc[j] = EE_forward(net1, net2, arms[j])
-                test_inf_time = inf_time + time.time() - temp
-                u[j] = f1[j] + 1 / (i+1) * f2[j]
+                #inference
+                f1 = torch.zeros(k).to(device)
+                f2 = torch.zeros(k).to(device)
+                u = torch.zeros(k).to(device)
+                dc = torch.zeros(k, explore_size).to(device)
+                for j in range(k):
+                    temp = time.time()
+                    f1[j], f2[j], dc[j] = EE_forward(net1, net2, arms[j])
+                    test_inf_time = test_inf_time + time.time() - temp
+                    u[j] = f1[j] + 1 / (i+1) * f2[j]
 
-            val, idx = u.sort()
-            max_prob = torch.Tensor([val[-1], idx[-1]])
-            pred = int(max_prob[1].item())
-            lbl = y.item()
-            if pred != lbl:
-                current_regret += 1
-        print(f'Testing accuracy: {n - current_regret}\n')        
-        f = open(f"results/{dataset_name}/ineural_res.txt", 'a')
-        f.write(f'Testing accuracy: {n - current_regret}\n')
+                val, idx = u.sort()
+                max_prob = torch.Tensor([val[-1], idx[-1]])
+                pred = int(max_prob[1].item())
+                lbl = y.item()
+                if pred == lbl:
+                    acc += 1
+            print(f'Testing accuracy: {acc/lim}\n')        
+            f = open(f"results/{dataset_name}/ineural_res.txt", 'a')
+            f.write(f'Testing accuracy: {acc/lim}\n')
+            f.close()
+            f = open('runtimes_ineural.txt', 'a')
+            f.write(f'{test_inf_time}, ')
+            f.close()
+        
+        f = open('runtimes_ineural.txt', 'a')
+        f.write(f'\n')
         f.close()
 
     return inf_time, train_time, test_inf_time
 
 
 device = 'cuda'
-os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 random.seed(42)
 np.random.seed(42)

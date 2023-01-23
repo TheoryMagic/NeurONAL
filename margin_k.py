@@ -55,7 +55,7 @@ class MLP(nn.Module):
 
 
 
-def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name='covertype', test=-1, begin=0, lr=0.001):
+def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name='covertype', test=1, begin=0, lr=0.001):
     data = Bandit_multi(dataset_name)
     X = data.X
     Y = data.y
@@ -114,26 +114,34 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name='covertype', 
         f.close()
     
     if test >= 0:
-        current_regret = 0
+        
         print('-------TESTING-------')
-        for i in range(test, test+n):
-            model.eval()
-            try:
-                x, y = dataset[i]
-            except:
-                break
-            x = x.view(1, -1).to(device)
-            temp = time.time()
-            k_prob = model(x)
-            test_inf_time = test_inf_time + time.time() - temp
-            max_prob = k_prob.max().item()
-            pred = k_prob.argmax().item()
-            lbl = y.item()
-            if pred != lbl:
-                current_regret += 1
-        print(f'Testing accuracy: {n - current_regret}\n')
-        f = open(f"results/{dataset_name}/margin_k_res.txt", 'a')
-        f.write(f'Testing accuracy: {n - current_regret}\n')
+        lim = min(n, len(dataset)-n)
+        for _ in range(5):
+            acc = 0
+            for i in range(n, n+lim):
+                model.eval()
+                ind = random.randint(n, len(dataset))
+                x, y = dataset[ind]
+                x = x.view(1, -1).to(device)
+                temp = time.time()
+                k_prob = model(x)
+                test_inf_time = test_inf_time + time.time() - temp
+                max_prob = k_prob.max().item()
+                pred = k_prob.argmax().item()
+                lbl = y.item()
+                if pred == lbl:
+                    acc += 1
+            print(f'Testing accuracy: {acc/lim}\n')
+            f = open(f"results/{dataset_name}/margin_k_res.txt", 'a')
+            f.write(f'Testing accuracy: {acc/lim}\n')
+            f.close()
+            f = open('runtimes_margin.txt', 'a')
+            f.write(f'{test_inf_time}, ')
+            f.close()
+        
+        f = open('runtimes_margin.txt', 'a')
+        f.write(f'\n')
         f.close()
 
     return inf_time, train_time, test_inf_time

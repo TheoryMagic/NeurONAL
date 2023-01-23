@@ -13,7 +13,6 @@ from utils import get_data, get_pretrain
 from load_data_addon import Bandit_multi
 
 def train_cls_batch(model, X, y, num_epochs=10, lr=0.001, batch_size=64):
-    device = 'cuda'
     model.train()
     X = torch.from_numpy(X).float()
     y = torch.from_numpy(y).float()
@@ -110,7 +109,6 @@ def calc_r(S, yhat, F_class, model_info):
     return rn
 
 def update_xn(H_class, xn, label0 ,label1):
-    device = 'cuda'
     global pred_now
     pred_now = []
     loss_fn = nn.BCELoss().to(device)
@@ -147,7 +145,6 @@ def update_set(H_class, F_class, p, yn, flag='S', model_info=None, F_class_info=
 
 
 def test_model_accuracy(H_class, X, y):
-    device = 'cuda'
     X = torch.from_numpy(X).float()
     y = torch.from_numpy(y).float()
 
@@ -167,7 +164,6 @@ def test_model_accuracy(H_class, X, y):
         print("Acc:{:.2f}".format(acc * 100.0 / num))
 
 def test_model_margin(H_class, dataset):
-    device = 'cuda'
     for model in H_class:
         with torch.no_grad():
             tot_margin = 0.0
@@ -191,13 +187,12 @@ class MLP(nn.Module):
 
 
 
-def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=-1):
+def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=1):
     random.seed(42)
     np.random.seed(42)
     torch.manual_seed(42)
     num_model = 5
     delta1, delta2 = 0.5, 0.5
-    device = 'cuda'
 
     # For pred_now, we store a tuple (prob, loss0, loss1)
     pred_now = []
@@ -335,34 +330,42 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=-1):
         f.close()
 
 
-    if test >= 0:
-        current_regret = 0
+    if test > 0:
         print('-------TESTING-------')
+        lim = min(n, len(dataset)-n)
+        for _ in range(5):
+            acc = 0
+            for i in range(n, n+lim):
+                ind = random.randint(n, len(dataset))
+                xn, yn = dataset[ind]
+                xn = xn.view(1, -1).to(device)
+                yn = yn.view(-1).float().to(device)
+                temp = time.time()
+                if i == 0:
+                    hn = H_class[0]
+                else:
+                    hn = learn(H_class, set_S, set_T, num_model=num_model, model_info=model_info, model=model)[0]
+                test_inf_time = test_inf_time + time.time() - temp
 
-        for i in range(test, test+n):
-            xn, yn = dataset[i]
-            xn = xn.view(1, -1).to(device)
-            yn = yn.view(-1).float().to(device)
-            temp = time.time()
-            if i == 0:
-                hn = H_class[0]
-            else:
-                hn = learn(H_class, set_S, set_T, num_model=num_model, model_info=model_info, model=model)[0]
-            inf_time = inf_time + time.time() - temp
-
-            with torch.no_grad():
-                prob = hn(xn).item()
-                pred = int(prob >= 0.5)
-                lbl = yn.item()
-                if pred != lbl:
-                    current_regret += 1
-        print(f'Testing accuracy: {n - current_regret}\n')
-        f = open(f"results/{dataset_name}/alps_res.txt", 'a')
-        f.write(f'Testing accuracy: {n - current_regret}\n')
+                with torch.no_grad():
+                    prob = hn(xn).item()
+                    pred = int(prob >= 0.5)
+                    lbl = yn.item()
+                    if pred == lbl:
+                        acc += 1
+            print(f'Testing accuracy: {acc/lim}\n')
+            f = open(f"results/{dataset_name}/alps_res.txt", 'a')
+            f.write(f'Testing accuracy: {acc/lim}\n')
+            f.close()
+            f = open('runtimes_alps.txt', 'a')
+            f.write(f'{test_inf_time}, ')
+            f.close()
+        
+        f = open('runtimes_alps.txt', 'a')
+        f.write(f'\n')
         f.close()
     
     return inf_time, train_time, test_inf_time
-
-    print(query_num, current_regret)
-    np.save('./res/{}/alps_res.npy'.format(dataset_name), regret)
     
+device = 'cuda'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
