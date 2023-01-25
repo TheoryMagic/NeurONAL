@@ -109,7 +109,7 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name='covertype', 
         regret.append(current_regret)
         print(f'{i},{budget},{num_epochs},{current_regret}')
 
-        f = open(f"results/{dataset_name}/margin_k_res.txt", 'a')
+        f = open(f"results/{dataset_name}/margin_res.txt", 'a')
         f.write(f'{i},{budget},{num_epochs},{current_regret}\n')
         f.close()
     
@@ -133,7 +133,7 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name='covertype', 
                 if pred == lbl:
                     acc += 1
             print(f'Testing accuracy: {acc/lim}\n')
-            f = open(f"results/{dataset_name}/margin_k_res.txt", 'a')
+            f = open(f"results/{dataset_name}/margin_res.txt", 'a')
             f.write(f'Testing accuracy: {acc/lim}\n')
             f.close()
             f = open('runtimes_margin.txt', 'a')

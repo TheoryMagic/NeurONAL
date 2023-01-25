@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 datasets = ['adult', 'letter', 'fashion', 'covertype', 'shuttle', 'MagicTelescope']
-methods = ['neural_pg', 'margin_k', 'ineural', 'neual_ntkd', 'alps']
+methods = ['neuronal', 'margin_k', 'ineural', 'neual_ntkd', 'alps']
 colors = ['red', 'blue', 'green', 'orange', 'purple']
 input_dir = 'results/'
 output_dir = 'graphs'
