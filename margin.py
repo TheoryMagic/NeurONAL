@@ -121,7 +121,7 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name='covertype', 
             acc = 0
             for i in range(n, n+lim):
                 model.eval()
-                ind = random.randint(n, len(dataset))
+                ind = random.randint(n, len(dataset)-1)
                 x, y = dataset[ind]
                 x = x.view(1, -1).to(device)
                 temp = time.time()

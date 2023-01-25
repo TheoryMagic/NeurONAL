@@ -153,7 +153,7 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
         
         regret.append(current_regret)
         print(f'{i},{budget},{num_epochs},{current_regret}')
-        f = open(f"results/{dataset_name}/neural_pg_res.txt", 'a')
+        f = open(f"results/{dataset_name}/neuronal_res.txt", 'a')
         f.write(f'{i},{budget},{num_epochs},{current_regret}\n')
         f.close()
 
@@ -164,7 +164,7 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
         for _ in range(5):
             acc = 0
             for i in range(n, n+lim):
-                ind = random.randint(n, len(dataset))
+                ind = random.randint(n, len(dataset)-1)
                 x, y = dataset[ind]
                 x = x.view(1, -1).to(device)
 
@@ -181,14 +181,14 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
                 if pred == lbl:
                     acc += 1
             print(f'Testing accuracy: {acc/lim}\n')
-            f = open(f"results/{dataset_name}/neural_pg_res.txt", 'a')
+            f = open(f"results/{dataset_name}/neuronal_res.txt", 'a')
             f.write(f'Testing accuracy: {acc/lim}\n')
             f.close()
-            f = open('runtimes_neuralpg.txt', 'a')
+            f = open('runtimes_neuronal.txt', 'a')
             f.write(f'{test_inf_time}, ')
             f.close()
         
-        f = open('runtimes_neuralpg.txt', 'a')
+        f = open('runtimes_neuronal.txt', 'a')
         f.write(f'\n')
         f.close()
 

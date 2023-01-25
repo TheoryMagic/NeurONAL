@@ -78,6 +78,7 @@ def train_NN_batch(model, X, Y, num_epochs=10, lr=0.001, batch_size=32):
     return batch_loss / num
 
 def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, test=1, begin=0, lr=0.001):
+    os.environ['CUDA_VISIBLE_DEVICES'] = '2'
     data = Bandit_multi(dataset_name)
     X = data.X
     Y = data.y
@@ -181,7 +182,7 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
         for _ in range(5):
             acc = 0
             for i in range(n, n+lim):
-                ind = random.randint(n, len(dataset))
+                ind = random.randint(n, len(dataset)-1)
                 x, y = dataset[ind]
                 x = x.view(1, -1).to(device)
 
@@ -217,11 +218,11 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
             f = open(f"results/{dataset_name}/ineural_res.txt", 'a')
             f.write(f'Testing accuracy: {acc/lim}\n')
             f.close()
-            f = open('runtimes_ineural.txt', 'a')
+            f = open('runtimes_ineural5.txt', 'a')
             f.write(f'{test_inf_time}, ')
             f.close()
         
-        f = open('runtimes_ineural.txt', 'a')
+        f = open('runtimes_ineural5.txt', 'a')
         f.write(f'\n')
         f.close()
 
@@ -229,7 +230,6 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
 
 
 device = 'cuda'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 random.seed(42)
 np.random.seed(42)

@@ -336,7 +336,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=1):
         for _ in range(5):
             acc = 0
             for i in range(n, n+lim):
-                ind = random.randint(n, len(dataset))
+                ind = random.randint(n, len(dataset)-1)
                 xn, yn = dataset[ind]
                 xn = xn.view(1, -1).to(device)
                 yn = yn.view(-1).float().to(device)

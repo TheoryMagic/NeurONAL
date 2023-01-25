@@ -157,7 +157,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=1):
         regret.append(current_regret)
 
         print(f'{i},{budget},{num_epochs},{current_regret}')
-        f = open(f"results/{dataset_name}/neual_ntkd_res.txt", 'a')
+        f = open(f"results/{dataset_name}/neual_ntk_res.txt", 'a')
         f.write(f'{i},{budget},{num_epochs},{current_regret}\n')
         f.close()
     
@@ -167,7 +167,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=1):
         for _ in range(5):
             acc = 0
             for i in range(n, n+lim):
-                ind = random.randint(n, len(dataset))
+                ind = random.randint(n, len(dataset)-1)
                 x, y = dataset[i]
                 x = x.view(1, -1).to(device)
                 x0 = torch.cat([x, ci], dim=1)
@@ -187,14 +187,14 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=1):
                 if pred == lbl:
                     acc += 1
             print(f'Testing accuracy: {acc/lim}\n')
-            f = open(f"results/{dataset_name}/neual_ntkd_res.txt", 'a')
+            f = open(f"results/{dataset_name}/neual_ntk_res.txt", 'a')
             f.write(f'Testing accuracy: {acc/lim}\n')
             f.close()
-            f = open('runtimes_ntkd.txt', 'a')
+            f = open('runtimes_ntk.txt', 'a')
             f.write(f'{test_inf_time}, ')
             f.close()
         
-        f = open('runtimes_ntkd.txt', 'a')
+        f = open('runtimes_ntk.txt', 'a')
         f.write(f'\n')
         f.close()
         
