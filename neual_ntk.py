@@ -71,7 +71,7 @@ gamma = 0.1
 device = 'cuda'
 dataset_name = 'fashion'
 
-def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=-1):
+def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=1):
     random.seed(42)
     np.random.seed(42)
     torch.manual_seed(42)
@@ -79,6 +79,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=-1):
     lam = 1.0
     gamma = 0.1
     device = 'cuda'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 
     data = Bandit_multi(dataset_name)
     X = data.X
@@ -156,41 +157,47 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=-1):
         regret.append(current_regret)
 
         print(f'{i},{budget},{num_epochs},{current_regret}')
-        f = open(f"results/{dataset_name}/neual_ntkd_res.txt", 'a')
+        f = open(f"results/{dataset_name}/neual_ntk_res.txt", 'a')
         f.write(f'{i},{budget},{num_epochs},{current_regret}\n')
         f.close()
     
-    if test >= 0:
-        current_regret = 0
+    if test > 0:
         print('-------TESTING-------')
-        for i in range(test, test+n):
-            x, y = dataset[i]
-            x = x.view(1, -1).to(device)
-            x0 = torch.cat([x, ci], dim=1)
-            x1 = torch.cat([ci, x], dim=1)
+        lim = min(n, len(dataset)-n)
+        for _ in range(5):
+            acc = 0
+            for i in range(n, n+lim):
+                ind = random.randint(n, len(dataset)-1)
+                x, y = dataset[i]
+                x = x.view(1, -1).to(device)
+                x0 = torch.cat([x, ci], dim=1)
+                x1 = torch.cat([ci, x], dim=1)
 
-            temp = time.time()
-            u0, g0, sigma0 = neural_forward(model, x0, Z)
-            u1, g1, sigma1 = neural_forward(model, x1, Z)
-            test_inf_time = test_inf_time + time.time() - temp
+                temp = time.time()
+                u0, g0, sigma0 = neural_forward(model, x0, Z)
+                u1, g1, sigma1 = neural_forward(model, x1, Z)
+                test_inf_time = test_inf_time + time.time() - temp
 
-            if u0 > u1:
-                pred = 0
-            else:
-                pred = 1
+                if u0 > u1:
+                    pred = 0
+                else:
+                    pred = 1
 
-            lbl = y.item()
-            if pred != lbl:
-                current_regret += 1
-        print(f'Testing accuracy: {n - current_regret}\n')
-        f = open(f"results/{dataset_name}/neual_ntkd_res.txt", 'a')
-        f.write(f'Testing accuracy: {n - current_regret}\n')
+                lbl = y.item()
+                if pred == lbl:
+                    acc += 1
+            print(f'Testing accuracy: {acc/lim}\n')
+            f = open(f"results/{dataset_name}/neual_ntk_res.txt", 'a')
+            f.write(f'Testing accuracy: {acc/lim}\n')
+            f.close()
+            f = open('runtimes_ntk.txt', 'a')
+            f.write(f'{test_inf_time}, ')
+            f.close()
+        
+        f = open('runtimes_ntk.txt', 'a')
+        f.write(f'\n')
         f.close()
         
     return inf_time, train_time, test_inf_time
-
-
-    print(query_num, current_regret)
-    np.save('./res/{}/neuralucb_res.npy'.format(dataset_name), regret)
 
 

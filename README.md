@@ -16,11 +16,8 @@ numpy 1.16.2
 alps.py     ALPS [Desalvo et al. 2021]
 
 margin.py   Margin
-
-neual_ntk_d.py  NeuralAL-NTK-Dynamic [Wang et al. 2021]
-
-neural_pg.py    Our method
-
+neual_ntk.py  NeuralAL-NTK-Dynamic [Wang et al. 2021]
+neur_on_al.py    Our method
 i_neural.py     I-NeurAL [Ban et al. 2022]
 
 
