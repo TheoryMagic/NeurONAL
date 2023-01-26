@@ -40,7 +40,7 @@ for i in range(len(datasets)):
     
     if method == "d":
         print(f"NeuAL-NTK on {datasets[i]}")
-        inf_time, train_time, test_inf_time = run_ntkd(n=num_rounds, budget=budget, num_epochs=num_epochs, dataset_name=datasets[i], test=test)
+        inf_time, train_time, test_inf_time = run_ntk(n=num_rounds, budget=budget, num_epochs=num_epochs, dataset_name=datasets[i], test=test)
         
         f = open('runtimes_ntk.txt', 'a')
 
