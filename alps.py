@@ -324,9 +324,9 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=1):
             tf = time.time()
 
         regret.append(current_regret)
-        print(f'{i},{budget},{num_epochs},{current_regret}')
+        print(f'{i},{query_num},{budget},{num_epochs},{current_regret}')
         f = open(f"results/{dataset_name}/alps_res.txt", 'a')
-        f.write(f'{i},{budget},{num_epochs},{current_regret}\n')
+        f.write(f'{i},{query_num},{budget},{num_epochs},{current_regret}\n')
         f.close()
 
 

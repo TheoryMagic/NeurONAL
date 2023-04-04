@@ -1,6 +1,7 @@
 from margin import run as run_margin
 from i_neural import run as run_ineural
 from neur_on_al import run as run_nonal
+from batch_neuronal import run as run_batch
 from neual_ntk import run as run_ntk
 from alps import run as run_alps
 import sys
@@ -25,7 +26,6 @@ argparser.add_argument('--test', help='0 for no test, 1 for test', default='1')
 argparser.add_argument('--method', help='\'a\' for ALPS, \'d\' for NeuAL-NTK, \'m\' for Margin, \'i\' for I-NeurAL and \'n\' for NeurONAL', default='n')
 
 args = argparser.parse_args()
-
 budget = float(args.b)
 num_epochs = int(args.ne)
 method = args.method
@@ -62,6 +62,11 @@ for i in range(len(datasets)):
         
         f = open('runtimes_neuronal.txt', 'a')
     
+    if method == 'b':
+        print(f'Batch NeurONAL on {datasets[i]}')
+        inf_time, train_time, test_inf_time = run_batch(n=num_rounds, margin=6, budget=budget, num_epochs=num_epochs, dataset_name=datasets[i], explore_size=npg_es[i], test=test, begin=begin[i])
+
+        f = open('runtimes_batch_neuronal.txt', 'a')
     f.write(f'{num_rounds}, {datasets[i]}, {inf_time}, {train_time}, {test_inf_time}\n')
     f.close()
     
