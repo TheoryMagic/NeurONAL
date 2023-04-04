@@ -119,8 +119,8 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
     train_time = 0
     test_inf_time = 0
 
-    train_batch_size = 20
-    batch_size = 20
+    train_batch_size = 100
+    batch_size = 30
     batch_counter = 0
     x1_train_batch, x2_train_batch, y1_batch, y2_batch = [], [], [], []
     weights = []
