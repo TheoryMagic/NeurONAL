@@ -159,16 +159,21 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
 
         # construct training set
         if neuronal_pred != margin_pred:
+            # calculate weight
             weight = abs(i_hat - i_deg).item()
+
+            # check to see if we have space to add to the batch
+            # (note: with the code structure, this should be always true)
             if batch_counter < train_batch_size:
                 if batch_counter >= batch_size and weights[0] < weight:
-                    # there is no space, we must remove the lowest weighted point
+                    # our batch is full, we must remove the lowest weighted point
                     weights.pop(0)
                     x1_train_batch.pop(0)
                     x2_train_batch.pop(0)
                     y1_batch.pop(0)
                     y2_batch.pop(0)
 
+                # maintain sorted list of weights, x1, x2, y1, and y2 batches
                 index = bisect(weights, weight)
                 weights.insert(index, weight)
                 x1_train_batch.insert(index, x)
