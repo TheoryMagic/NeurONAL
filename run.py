@@ -23,7 +23,7 @@ argparser = argparse.ArgumentParser()
 argparser.add_argument('--b', help='budget percentage', default='0.3')
 argparser.add_argument('--ne', help='number of epochs', default='40')
 argparser.add_argument('--test', help='0 for no test, 1 for test', default='1')
-argparser.add_argument('--method', help='\'a\' for ALPS, \'d\' for NeuAL-NTK, \'m\' for Margin, \'i\' for I-NeurAL and \'n\' for NeurONAL', default='n')
+argparser.add_argument('--method', help='\'a\' for ALPS, \'d\' for NeuAL-NTK, \'m\' for Margin, \'i\' for I-NeurAL and \'n\' for NeurONAL', default='b')
 
 args = argparser.parse_args()
 budget = float(args.b)

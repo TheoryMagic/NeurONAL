@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
+from tqdm import tqdm
 
 from utils import get_data
 from load_data import load_mnist_1d
@@ -93,123 +94,100 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
     X = data.X
     Y = data.y
 
-    X = np.array(X)
+    X = np.array(X)[:n]
     if len(X.shape) == 3:
         N, h, w = X.shape
-        X = np.reshape(X, (N, h*w))
+        X = np.reshape(X, (N, h*w))[:n]
     Y = np.array(Y)
-    Y = Y.astype(np.int64) - begin
+    Y = (Y.astype(np.int64) - begin)[:n]
 
     dataset = TensorDataset(torch.tensor(X.astype(np.float32)), torch.tensor(Y.astype(np.int64)))
 
     k = len(set(Y))
-    hidden_size = 100 #default value
     regret = []
     net1 = Network_exploitation(X.shape[1], k=k).to(device)
     net2 = Network_exploration(explore_size, k=k).to(device)
 
-    margin_model = MLP(X.shape[1], k=k).to(device)
-
     X1_train, X2_train, y1, y2 = [], [], [], []
     budget = int(n * budget)
-    current_regret = 0.0
     query_num = 0
     ci = torch.zeros(1, X.shape[1]).to(device)
     inf_time = 0
     train_time = 0
     test_inf_time = 0
+    R = budget
 
-    train_batch_size = 100
+    x1_train_batch, x2_train_batch, y1_batch, y2_batch = None, None, None, None
     batch_size = 30
     batch_counter = 0
-    x1_train_batch, x2_train_batch, y1_batch, y2_batch = [], [], [], []
-    weights = []
+
+    for j in range(R):
+        x1_train_batch, x2_train_batch, y1_batch, y2_batch = [], [], [], []
+        weights = []
+        current_regret = 0.0
+        indices = []
+        for i in tqdm(range(n)):
+            # load data point
+            try:
+                x, y = dataset[i]
+            except:
+                break
+            x = x.view(1, -1).to(device)
+
+            # predict via NeurONAL
+            temp = time.time()
+            f1, f2, dc = EE_forward(net1, net2, x)
+            inf_time = inf_time + time.time() - temp
+            u = f1[0] + 1 / (i+1) * f2
+            u_sort, u_ind = torch.sort(u)
+            i_hat = u_sort[-1]
+            i_deg = u_sort[-2]
+            neuronal_pred = int(u_ind[-1].item())
+
+            lbl = y.item()
+            if neuronal_pred != lbl:
+                current_regret += 1
+
+                # calculate weight
+                weight = 1/(abs(i_hat - i_deg).item())
+
+                if weight > max_weight:
+                    max_weight = weight
+                    index = i
+                    x1_train_batch = x
+                    x2_train_batch = torch.reshape(dc, (1, len(dc)))
+                    r_1 = torch.zeros(k).to(device)
+                    r_1[lbl] = 1
+                    y1_batch = r_1 
+                    y2_batch = (r_1 - f1)[0]
+                
 
 
-    for i in range(n):
-        # load data point
-        try:
-            x, y = dataset[i]
-        except:
-            break
-        x = x.view(1, -1).to(device)
 
-        # predict via NeurONAL
-        temp = time.time()
-        f1, f2, dc = EE_forward(net1, net2, x)
-        inf_time = inf_time + time.time() - temp
-        u = f1[0] + 1 / (i+1) * f2
-        u_sort, u_ind = torch.sort(u)
-        i_hat = u_sort[-1]
-        i_deg = u_sort[-2]
-        neuronal_pred = int(u_ind[-1].item())
-
-        # predict via margin
-        k_prob = margin_model(x)
-        max_prob = k_prob.max().item()
-        margin_pred = k_prob.argmax().item()
-
-        ind = 0
-        if abs(i_hat - i_deg) < margin * 0.1:
-            ind = 1
-
-        lbl = y.item()
-        if neuronal_pred != lbl:
-            current_regret += 1
-
-        # construct training set
-        if neuronal_pred != margin_pred:
-            # calculate weight
-            weight = abs(i_hat - i_deg).item()
-
-            # check to see if we have space to add to the batch
-            # (note: with the code structure, this should be always true)
-            if batch_counter < train_batch_size:
-                if batch_counter >= batch_size and weights[0] < weight:
-                    # our batch is full, we must remove the lowest weighted point
-                    weights.pop(0)
-                    x1_train_batch.pop(0)
-                    x2_train_batch.pop(0)
-                    y1_batch.pop(0)
-                    y2_batch.pop(0)
-
-                # maintain sorted list of weights, x1, x2, y1, and y2 batches
-                index = bisect(weights, weight)
-                weights.insert(index, weight)
-                x1_train_batch.insert(index, x)
-                x2_train_batch.insert(index, torch.reshape(dc, (1, len(dc))))
-                r_1 = torch.zeros(k).to(device)
-                r_1[lbl] = 1
-                y1_batch.insert(index, r_1) 
-                y2_batch.insert(index, (r_1 - f1)[0])
-                batch_counter += 1
-        
-
-        if batch_counter == train_batch_size and query_num < budget: 
-            query_num += batch_size
+        if query_num < budget: 
+            query_num += 1
 
             #add predicted rewards to the sets
-            X1_train.extend(x1_train_batch)
-            X2_train.extend(x2_train_batch)
-            y1.extend(y1_batch) 
-            y2.extend(y2_batch)
+            X1_train.append(x1_train_batch)
+            X2_train.append(x2_train_batch)
+            y1.append(y1_batch) 
+            y2.append(y2_batch)
 
             temp = time.time()
             train_NN_batch(net1, X1_train, y1, num_epochs=num_epochs, lr=lr)
             train_NN_batch(net2, X2_train, y2, num_epochs=num_epochs, lr=lr)
-            train_NN_batch(margin_model, X1_train, y1, num_epochs=num_epochs, lr=lr)
             train_time = train_time + time.time() - temp
 
-            batch_counter = 0
-            x1_train_batch, x2_train_batch, y1_batch, y2_batch = [], [], [], []
-            weights = []
-            print("trained batch")
+            X = torch.cat((torch.Tensor(X[:index]), torch.Tensor(X[index+1:])))
+            Y = torch.cat((torch.IntTensor(Y[:index]), torch.IntTensor(Y[index+1:])))
+            dataset = TensorDataset(X, Y)
+            n = n - 1
+                
             
-        
         regret.append(current_regret)
-        print(f'{i},{query_num},{budget},{num_epochs},{current_regret}')
+        print(f'{j},{query_num},{budget},{num_epochs},{current_regret}')
         f = open(f"results/{dataset_name}/batch_neuronal_res.txt", 'a')
-        f.write(f'{i},{query_num},{budget},{num_epochs},{current_regret}\n')
+        f.write(f'{j},{query_num},{budget},{num_epochs},{current_regret}\n')
         f.close()
 
     if test > 0:
