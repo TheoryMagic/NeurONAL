@@ -1,4 +1,4 @@
-mkdir graphs/
+#dmkdir graphs/
 mkdir results
 mkdir results/letter
 mkdir results/covertype

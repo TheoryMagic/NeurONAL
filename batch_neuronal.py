@@ -101,7 +101,18 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
     Y = np.array(Y)
     Y = (Y.astype(np.int64) - begin)[:n]
 
-    dataset = TensorDataset(torch.tensor(X.astype(np.float32)), torch.tensor(Y.astype(np.int64)))
+    train_dataset = TensorDataset(torch.tensor(X.astype(np.float32)), torch.tensor(Y.astype(np.int64)))
+
+    test_x = data.X[n:]
+    test_y = data.y[n:]
+
+    if len(test_x) > n:
+        test_x = test_x[:n]
+        test_y = test_y[:n]
+    test_y = np.array(test_y)
+    test_y = (test_y.astype(np.int64) - begin)
+    
+    test_dataset = TensorDataset(torch.tensor(test_x.astype(np.float32)), torch.tensor(test_y.astype(np.int64)))
 
     k = len(set(Y))
     regret = []
@@ -115,21 +126,88 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
     inf_time = 0
     train_time = 0
     test_inf_time = 0
-    R = budget
+    R = 10
 
-    x1_train_batch, x2_train_batch, y1_batch, y2_batch = None, None, None, None
-    batch_size = 30
+    batch_size = 100
     batch_counter = 0
+    queried_rows = []
 
     for j in range(R):
         x1_train_batch, x2_train_batch, y1_batch, y2_batch = [], [], [], []
+        batch_counter = 0
         weights = []
         current_regret = 0.0
         indices = []
         for i in tqdm(range(n)):
+            if i in queried_rows:
+                continue
             # load data point
             try:
-                x, y = dataset[i]
+                x, y = train_dataset[i]
+            except:
+                break
+            x = x.view(1, -1).to(device)
+
+            # predict via NeurONAL
+            temp = time.time()
+            f1, f2, dc = EE_forward(net1, net2, x)
+            inf_time = inf_time + time.time() - temp
+            u = f1[0] + 1 / (i+1) * f2
+            u_sort, u_ind = torch.sort(u)
+            i_hat = u_sort[-1]
+            i_deg = u_sort[-2]
+            neuronal_pred = int(u_ind[-1].item())
+
+            # calculate weight
+            weight = 1/(abs(i_hat - i_deg).item())
+            
+            # update the batch if necessary
+            if batch_counter >= batch_size and weights[0] < weight:
+                # our batch is full, we must remove the lowest weighted point
+                weights.pop(0)
+                indices.pop(0)
+                x1_train_batch.pop(0)
+                x2_train_batch.pop(0)
+                y1_batch.pop(0)
+                y2_batch.pop(0)
+                batch_counter -= 1
+
+            if batch_counter < batch_size:
+                # maintain sorted list of weights, x1, x2, y1, and y2 batches
+                index = bisect(weights, weight)
+                weights.insert(index, weight)
+                indices.insert(index, i)
+                x1_train_batch.insert(index, x)
+                x2_train_batch.insert(index, torch.reshape(dc, (1, len(dc))))
+                r_1 = torch.zeros(k).to(device)
+                r_1[y.item()] = 1
+                y1_batch.insert(index, r_1) 
+                y2_batch.insert(index, (r_1 - f1)[0])
+                batch_counter += 1
+
+
+        
+
+        #add predicted rewards to the sets
+        X1_train.extend(x1_train_batch)
+        X2_train.extend(x2_train_batch)
+        y1.extend(y1_batch) 
+        y2.extend(y2_batch)
+
+        queried_rows.extend(indices)
+
+        # update the model
+        temp = time.time()
+        train_NN_batch(net1, X1_train, y1, num_epochs=num_epochs, lr=lr)
+        train_NN_batch(net2, X2_train, y2, num_epochs=num_epochs, lr=lr)
+        train_time = train_time + time.time() - temp
+
+        # calculate testing regret
+        current_acc = 0
+        for i in tqdm(range(len(test_dataset))):
+            # load data point
+            try:
+                x, y = test_dataset[i]
             except:
                 break
             x = x.view(1, -1).to(device)
@@ -145,84 +223,14 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
             neuronal_pred = int(u_ind[-1].item())
 
             lbl = y.item()
-            if neuronal_pred != lbl:
-                current_regret += 1
-
-                # calculate weight
-                weight = 1/(abs(i_hat - i_deg).item())
-
-                if weight > max_weight:
-                    max_weight = weight
-                    index = i
-                    x1_train_batch = x
-                    x2_train_batch = torch.reshape(dc, (1, len(dc)))
-                    r_1 = torch.zeros(k).to(device)
-                    r_1[lbl] = 1
-                    y1_batch = r_1 
-                    y2_batch = (r_1 - f1)[0]
-                
-
-
-
-        if query_num < budget: 
-            query_num += 1
-
-            #add predicted rewards to the sets
-            X1_train.append(x1_train_batch)
-            X2_train.append(x2_train_batch)
-            y1.append(y1_batch) 
-            y2.append(y2_batch)
-
-            temp = time.time()
-            train_NN_batch(net1, X1_train, y1, num_epochs=num_epochs, lr=lr)
-            train_NN_batch(net2, X2_train, y2, num_epochs=num_epochs, lr=lr)
-            train_time = train_time + time.time() - temp
-
-            X = torch.cat((torch.Tensor(X[:index]), torch.Tensor(X[index+1:])))
-            Y = torch.cat((torch.IntTensor(Y[:index]), torch.IntTensor(Y[index+1:])))
-            dataset = TensorDataset(X, Y)
-            n = n - 1
-                
-            
-        regret.append(current_regret)
-        print(f'{j},{query_num},{budget},{num_epochs},{current_regret}')
+            if neuronal_pred == lbl:
+                current_acc += 1
+        
+        testing_acc = current_acc / len(test_dataset)
+        
+        print(f'testing acc for round {j}: {testing_acc}')
         f = open(f"results/{dataset_name}/batch_neuronal_res.txt", 'a')
-        f.write(f'{j},{query_num},{budget},{num_epochs},{current_regret}\n')
-        f.close()
-
-    if test > 0:
-        
-        print('-------TESTING-------')
-        lim = min(n, len(dataset)-n)
-        for _ in range(5):
-            acc = 0
-            for i in range(n, n+lim):
-                ind = random.randint(n, len(dataset)-1)
-                x, y = dataset[ind]
-                x = x.view(1, -1).to(device)
-
-                temp = time.time()
-                f1, f2, dc = EE_forward(net1, net2, x)
-                test_inf_time = test_inf_time + time.time() - temp
-                u = f1[0] + 1 / (i+1) * f2
-                u_sort, u_ind = torch.sort(u)
-                i_hat = u_sort[-1]
-                i_deg = u_sort[-2]
-                    
-                pred = int(u_ind[-1].item())
-                lbl = y.item()
-                if pred == lbl:
-                    acc += 1
-            print(f'Testing accuracy: {acc/lim}\n')
-            f = open(f"results/{dataset_name}/batch_neuronal_res.txt", 'a')
-            f.write(f'Testing accuracy: {acc/lim}\n')
-            f.close()
-            f = open('runtimes_batch_neuronal.txt', 'a')
-            f.write(f'{test_inf_time}, ')
-            f.close()
-        
-        f = open('runtimes_batch_neuronal.txt', 'a')
-        f.write(f'\n')
+        f.write(f'testing acc for round {j}: {testing_acc}\n')
         f.close()
 
     return inf_time, train_time, test_inf_time

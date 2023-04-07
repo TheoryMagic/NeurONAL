@@ -16,7 +16,7 @@ num_rounds = 10000
 num_test = num_rounds
 datasets = ['letter', 'covertype', 'MagicTelescope', 'shuttle', 'adult', 'fashion']
 in_es = [3079, 1350, 44, 128, 416, 15377]
-npg_es = [1544, 208, 26, 34, 212, 1560]
+npg_es = [1544, 208, 26, 30, 212, 1560]
 begin = [0, 1, 1, 1, 1, 1]
 
 argparser = argparse.ArgumentParser()

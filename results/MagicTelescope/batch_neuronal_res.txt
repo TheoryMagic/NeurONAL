@@ -1,0 +1,10 @@
+testing acc for round 0: 0.6543237250554323
+testing acc for round 1: 0.6478935698447894
+testing acc for round 2: 0.6605321507760532
+testing acc for round 3: 0.6618625277161863
+testing acc for round 4: 0.6715077605321508
+testing acc for round 5: 0.7151884700665189
+testing acc for round 6: 0.7267184035476718
+testing acc for round 7: 0.7329268292682927
+testing acc for round 8: 0.7413525498891352
+testing acc for round 9: 0.751330376940133
