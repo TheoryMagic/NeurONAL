@@ -128,7 +128,7 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
     test_inf_time = 0
     R = 10
 
-    batch_size = 100
+    batch_size = 100 #b
     batch_counter = 0
     queried_rows = []
 
@@ -136,7 +136,6 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
         x1_train_batch, x2_train_batch, y1_batch, y2_batch = [], [], [], []
         batch_counter = 0
         weights = []
-        current_regret = 0.0
         indices = []
         for i in tqdm(range(n)):
             if i in queried_rows:
@@ -160,33 +159,31 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
 
             # calculate weight
             weight = 1/(abs(i_hat - i_deg).item())
-            
-            # update the batch if necessary
-            if batch_counter >= batch_size and weights[0] < weight:
-                # our batch is full, we must remove the lowest weighted point
-                weights.pop(0)
-                indices.pop(0)
-                x1_train_batch.pop(0)
-                x2_train_batch.pop(0)
-                y1_batch.pop(0)
-                y2_batch.pop(0)
-                batch_counter -= 1
-
-            if batch_counter < batch_size:
-                # maintain sorted list of weights, x1, x2, y1, and y2 batches
-                index = bisect(weights, weight)
-                weights.insert(index, weight)
-                indices.insert(index, i)
-                x1_train_batch.insert(index, x)
-                x2_train_batch.insert(index, torch.reshape(dc, (1, len(dc))))
-                r_1 = torch.zeros(k).to(device)
-                r_1[y.item()] = 1
-                y1_batch.insert(index, r_1) 
-                y2_batch.insert(index, (r_1 - f1)[0])
-                batch_counter += 1
-
-
+            weights.append(weight)
+            indices.append(i)
         
+
+        # create the distribution and sample b points from it
+        weights = [((w - min(weights)) / (max(weights) - min(weights))) for w in weights]
+        for _ in range(batch_size):
+            ind = random.choices(indices, weights=weights)
+            x, y = train_dataset[ind]
+
+            temp = time.time()
+            f1, f2, dc = EE_forward(net1, net2, x)
+            inf_time = inf_time + time.time() - temp
+            u = f1[0] + 1 / (i+1) * f2
+            u_sort, u_ind = torch.sort(u)
+            i_hat = u_sort[-1]
+            i_deg = u_sort[-2]
+            neuronal_pred = int(u_ind[-1].item())
+            
+            x1_train_batch.append(x)
+            x2_train_batch.append(torch.reshape(dc, (1, len(dc))))
+            r_1 = torch.zeros(k).to(device)
+            r_1[y.item()] = 1
+            y1_batch.append(r_1) 
+            y2_batch.append((r_1 - f1)[0])
 
         #add predicted rewards to the sets
         X1_train.extend(x1_train_batch)
