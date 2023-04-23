@@ -1,10 +1,8 @@
 import os
 import time
-import math
 import random
 import numpy as np
-from bisect import bisect
-
+from numpy.random import choice
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -12,8 +10,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
-from utils import get_data
-from load_data import load_mnist_1d
 from skimage.measure import block_reduce
 from load_data_addon import Bandit_multi
 
@@ -65,15 +61,16 @@ def train_NN_batch(model, X, Y, num_epochs=10, lr=0.0001, batch_size=64):
     model.train()
     X = torch.cat(X).float()
     Y = torch.stack(Y).float().detach()
+    
     optimizer = optim.Adam(model.parameters(), lr=lr)
-    dataset = TensorDataset(X, Y)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     num = X.size(1)
 
-    for i in range(num_epochs):
+    index = np.arange(len(X))
+    np.random.shuffle(index)
+    for _ in range(num_epochs):
         batch_loss = 0.0
-        for x, y in dataloader:
-            x, y = x.to(device), y.to(device)
+        for i in index:
+            x, y = X[i].to(device), Y[i].to(device)
             y = torch.reshape(y, (1,-1))
             pred = model(x).view(-1)
 
@@ -115,26 +112,25 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
     test_dataset = TensorDataset(torch.tensor(test_x.astype(np.float32)), torch.tensor(test_y.astype(np.int64)))
 
     k = len(set(Y))
-    regret = []
     net1 = Network_exploitation(X.shape[1], k=k).to(device)
     net2 = Network_exploration(explore_size, k=k).to(device)
 
     X1_train, X2_train, y1, y2 = [], [], [], []
     budget = int(n * budget)
-    query_num = 0
-    ci = torch.zeros(1, X.shape[1]).to(device)
     inf_time = 0
     train_time = 0
     test_inf_time = 0
-    R = 10
+    R = 4
+    batch_size = 1000
+    num_epochs = 20
 
-    batch_size = 100 #b
-    batch_counter = 0
+    mu = k
+    gamma = 300
+
+    
     queried_rows = []
-
     for j in range(R):
         x1_train_batch, x2_train_batch, y1_batch, y2_batch = [], [], [], []
-        batch_counter = 0
         weights = []
         indices = []
         for i in tqdm(range(n)):
@@ -158,40 +154,42 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
             neuronal_pred = int(u_ind[-1].item())
 
             # calculate weight
-            weight = 1/(abs(i_hat - i_deg).item())
+            weight = abs(i_hat - i_deg).item()
             weights.append(weight)
             indices.append(i)
         
 
         # create the distribution and sample b points from it
-        weights = [((w - min(weights)) / (max(weights) - min(weights))) for w in weights]
-        for _ in range(batch_size):
-            ind = random.choices(indices, weights=weights)
-            x, y = train_dataset[ind]
+        i_hat = np.argmin(weights)
+        w_hat = weights[i_hat]
+        distribution = [(w_hat / (mu * w_hat + gamma * (weights[x] - w_hat))) if x != i_hat else 0 for x in range(len(weights))]
+        distribution[i_hat] = 1 - sum(distribution)
+        #weights = [w/s for w in weights]
 
-            temp = time.time()
-            f1, f2, dc = EE_forward(net1, net2, x)
-            inf_time = inf_time + time.time() - temp
-            u = f1[0] + 1 / (i+1) * f2
-            u_sort, u_ind = torch.sort(u)
-            i_hat = u_sort[-1]
-            i_deg = u_sort[-2]
-            neuronal_pred = int(u_ind[-1].item())
-            
-            x1_train_batch.append(x)
-            x2_train_batch.append(torch.reshape(dc, (1, len(dc))))
-            r_1 = torch.zeros(k).to(device)
-            r_1[y.item()] = 1
-            y1_batch.append(r_1) 
-            y2_batch.append((r_1 - f1)[0])
+        # sample from distribution
+        ind = choice(a=indices, size=1, p=distribution).item()
+        x, y = train_dataset[ind]
+        x = x.view(1, -1).to(device)
 
-        #add predicted rewards to the sets
-        X1_train.extend(x1_train_batch)
-        X2_train.extend(x2_train_batch)
-        y1.extend(y1_batch) 
-        y2.extend(y2_batch)
+        temp = time.time()
+        f1, f2, dc = EE_forward(net1, net2, x)
+        inf_time = inf_time + time.time() - temp
+        u = f1[0] + 1 / (i+1) * f2
+        u_sort, u_ind = torch.sort(u)
+        i_hat = u_sort[-1]
+        i_deg = u_sort[-2]
+        neuronal_pred = int(u_ind[-1].item())
+        
+        # add predicted rewards to the sets
+        X1_train.append(x)
+        X2_train.append(torch.reshape(dc, (1, len(dc))))
+        r_1 = torch.zeros(k).to(device)
+        r_1[y.item()] = 1
+        y1.append(r_1) 
+        y2.append((r_1 - f1)[0])
 
-        queried_rows.extend(indices)
+        # update unlabeled set
+        queried_rows.append(ind)
 
         # update the model
         temp = time.time()
@@ -232,9 +230,9 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
 
     return inf_time, train_time, test_inf_time
 
+
 device = 'cuda'
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-
 random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)

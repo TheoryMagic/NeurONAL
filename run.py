@@ -12,7 +12,7 @@ from utils import get_data
 from load_data import load_mnist_1d
 from load_data_addon import Bandit_multi
 
-num_rounds = 10
+num_rounds = 10000
 num_test = num_rounds
 datasets = ['letter', 'covertype', 'MagicTelescope', 'shuttle', 'adult', 'fashion']
 in_es = [3079, 1350, 44, 128, 416, 15377]
