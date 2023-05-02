@@ -192,7 +192,7 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
         # update unlabeled set
         queried_rows.append(ind)
 
-        if len(y1) % 100 == 0:
+        if j % 100 == 0:
         # update the model
             temp = time.time()
             train_NN_batch(net1, X1_train, y1, num_epochs=num_epochs, lr=lr)
