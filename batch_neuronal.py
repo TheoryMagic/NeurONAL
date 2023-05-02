@@ -67,6 +67,7 @@ def train_NN_batch(model, X, Y, num_epochs=10, lr=0.0001, batch_size=64):
 
     index = np.arange(len(X))
     np.random.shuffle(index)
+    index = index[:batch_size]
     for _ in range(num_epochs):
         batch_loss = 0.0
         for i in index:
