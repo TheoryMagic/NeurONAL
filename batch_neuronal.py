@@ -57,7 +57,7 @@ def EE_forward(net1, net2, x):
     f2 = net2(dc)
     return f1, f2, dc
 
-def train_NN_batch(model, X, Y, num_epochs=10, lr=0.0001, batch_size=64):
+def train_NN_batch(model, X, Y, num_epochs=10, lr=0.0001, batch_size=64, num_batch=4):
     model.train()
     X = torch.cat(X).float()
     Y = torch.stack(Y).float().detach()
@@ -65,25 +65,26 @@ def train_NN_batch(model, X, Y, num_epochs=10, lr=0.0001, batch_size=64):
     optimizer = optim.Adam(model.parameters(), lr=lr)
     num = X.size(1)
 
-    index = np.arange(len(X))
-    np.random.shuffle(index)
-    index = index[:batch_size]
-    for _ in range(num_epochs):
-        batch_loss = 0.0
-        for i in index:
-            x, y = X[i].to(device), Y[i].to(device)
-            y = torch.reshape(y, (1,-1))
-            pred = model(x).view(-1)
+    for _ in range(num_batch):
+        index = np.arange(len(X))
+        np.random.shuffle(index)
+        index = index[:batch_size]
+        for _ in range(num_epochs):
+            batch_loss = 0.0
+            for i in index:
+                x, y = X[i].to(device), Y[i].to(device)
+                y = torch.reshape(y, (1,-1))
+                pred = model(x).view(-1)
 
-            optimizer.zero_grad()
-            loss = torch.mean((pred - y) ** 2)
-            loss.backward()
-            optimizer.step()
+                optimizer.zero_grad()
+                loss = torch.mean((pred - y) ** 2)
+                loss.backward()
+                optimizer.step()
 
-            batch_loss += loss.item()
-        
-        if batch_loss / num <= 1e-3:
-            return batch_loss / num
+                batch_loss += loss.item()
+            
+            if batch_loss / num <= 1e-3:
+                return batch_loss / num
 
     return batch_loss / num
 
@@ -191,11 +192,12 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
         # update unlabeled set
         queried_rows.append(ind)
 
+        if len(y1) % 100 == 0:
         # update the model
-        temp = time.time()
-        train_NN_batch(net1, X1_train, y1, num_epochs=num_epochs, lr=lr)
-        train_NN_batch(net2, X2_train, y2, num_epochs=num_epochs, lr=lr)
-        train_time = train_time + time.time() - temp
+            temp = time.time()
+            train_NN_batch(net1, X1_train, y1, num_epochs=num_epochs, lr=lr)
+            train_NN_batch(net2, X2_train, y2, num_epochs=num_epochs, lr=lr)
+            train_time = train_time + time.time() - temp
 
         # calculate testing regret
         if j % 100 == 0:
