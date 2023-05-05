@@ -272,16 +272,7 @@ class ResNet(nn.Module): # (BasicBlock, [2, 2, 2, 2])
         return x
     
     def reshape_dc(self, x, dataset):
-        if dataset in ['letter', 'fashion']:
-            x = x.reshape((1, 1, 1, 219017))
-        elif dataset == 'covertype':
-            x = x.reshape((1, 1, 14, 7))
-        elif dataset == 'adult':
-            x = x.reshape((1, 1, 5, 21))
-        elif dataset == 'shuttle':
-            x = x.reshape((1, 1, 3, 3))
-        elif dataset == 'MagicTelescope':
-            x = x.reshape((1, 1, 2, 5))
+        x = x.reshape((1, 1, 1, x.shape[0]))
         return x
 
     def get_embedding(self, x, dataset, dc):
