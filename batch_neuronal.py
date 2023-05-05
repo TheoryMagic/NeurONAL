@@ -204,7 +204,7 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
         #weights = [w/s for w in weights]
 
         # sample from distribution
-        ind = choice(a=indices, size=100, p=distribution).item()
+        ind = choice(a=indices, size=100, p=distribution)
 
         for i in ind:
             x, y = train_dataset[i]
