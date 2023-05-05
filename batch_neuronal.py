@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
+from models import CNNnet, MLP, ResNet18, ResNet10, VGG11, CNNAvgPool
 
 from skimage.measure import block_reduce
 from load_data_addon import Bandit_multi
@@ -44,20 +45,20 @@ class MLP(nn.Module):
     def forward(self, x):
         return torch.sigmoid(self.fc2(self.activate(self.fc1(x))))
 
-def EE_forward(net1, net2, x):
+def EE_forward(net1, net2, x, dataset):
 
     x.requires_grad = True
-    f1 = net1(x)
+    f1 = net1(x, dataset, dc=False)
     net1.zero_grad()
     f1.sum().backward(retain_graph=True)
     dc = torch.cat([p.grad.flatten().detach() for p in net1.parameters()])
     #dc = dc / torch.linalg.norm(dc)
     dc = block_reduce(dc.cpu(), block_size=51, func=np.mean)
     dc = torch.from_numpy(dc).to(x.device)
-    f2 = net2(dc)
+    f2 = net2(dc, dataset, dc=True)
     return f1, f2, dc
 
-def train_NN_batch(model, X, Y, num_epochs=10, lr=0.0001, batch_size=64, num_batch=4):
+def train_NN_batch(model, X, Y, dataset, dc, num_epochs=10, lr=0.0001, batch_size=64, num_batch=4):
     model.train()
     X = torch.cat(X).float()
     Y = torch.stack(Y).float().detach()
@@ -74,7 +75,7 @@ def train_NN_batch(model, X, Y, num_epochs=10, lr=0.0001, batch_size=64, num_bat
             for i in index:
                 x, y = X[i].to(device), Y[i].to(device)
                 y = torch.reshape(y, (1,-1))
-                pred = model(x).view(-1)
+                pred = model(x, dataset, dc).view(-1)
 
                 optimizer.zero_grad()
                 loss = torch.mean((pred - y) ** 2)
@@ -88,7 +89,27 @@ def train_NN_batch(model, X, Y, num_epochs=10, lr=0.0001, batch_size=64, num_bat
 
     return batch_loss / num
 
-def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, test=1, begin=0, lr=0.0001):
+# Upgraded Model
+
+def init_resnet(k):
+    model = ResNet18(k)
+
+    model.MSE = 0
+    model.best_test_acc = 0
+    model.prev_best_test_acc = 0
+    model.better_than_prev_epochs = 0
+    model.current_round_epochs = 0
+    model.train_converge_epochs = 0
+    print("\n# params:{}.\n".format(model.count_parameters()))
+
+    model.device = 'cuda'
+    model.cuda()
+
+    return model
+
+# Training/Testing script
+
+def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, test=1, begin=0, lr=0.0001):
     data = Bandit_multi(dataset_name)
     X = data.X
     Y = data.y
@@ -114,8 +135,10 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
     test_dataset = TensorDataset(torch.tensor(test_x.astype(np.float32)), torch.tensor(test_y.astype(np.int64)))
 
     k = len(set(Y))
-    net1 = Network_exploitation(X.shape[1], k=k).to(device)
-    net2 = Network_exploration(explore_size, k=k).to(device)
+    #net1 = Network_exploitation(X.shape[1], k=k).to(device)
+    net1 = init_resnet(k)
+    #net2 = Network_exploration(explore_size, k=k).to(device)
+    net2 = init_resnet(k)
 
     X1_train, X2_train, y1, y2 = [], [], [], []
     budget = int(n * budget)
@@ -146,10 +169,13 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
 
             # predict via NeurONAL
             temp = time.time()
-            f1, f2, dc = EE_forward(net1, net2, x)
+            f1, f2, dc = EE_forward(net1, net2, x, dataset_name)
+            f1 = f1[0]
             inf_time = inf_time + time.time() - temp
             u = f1[0] + 1 / (i+1) * f2
             u_sort, u_ind = torch.sort(u)
+            u_sort = u_sort[0]
+            u_ind = u_ind[0]
             i_hat = u_sort[-1]
             i_deg = u_sort[-2]
             neuronal_pred = int(u_ind[-1].item())
@@ -163,41 +189,55 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
         # create the distribution and sample b points from it
         i_hat = np.argmin(weights)
         w_hat = weights[i_hat]
-        distribution = [(w_hat / (mu * w_hat + gamma * (weights[x] - w_hat))) if x != i_hat else 0 for x in range(len(weights))]
+        distribution = []
+        for x in range(len(weights)):
+            if x != i_hat:
+                quotient = (mu * w_hat + gamma * (weights[x] - w_hat))
+                if quotient == 0:
+                    print(f'mu = {mu}, w_hat = {w_hat}, weights[x] = {weights[x]} and x = {x}')
+                    quotient = 0.00000001
+                distribution.append((w_hat / quotient))
+            else:
+                distribution.append(0)
+        #distribution = [ if x != i_hat else 0 for x in range(len(weights))]
         distribution[i_hat] = 1 - sum(distribution)
         #weights = [w/s for w in weights]
 
         # sample from distribution
-        ind = choice(a=indices, size=1, p=distribution).item()
-        x, y = train_dataset[ind]
-        x = x.view(1, -1).to(device)
+        ind = choice(a=indices, size=100, p=distribution).item()
 
-        temp = time.time()
-        f1, f2, dc = EE_forward(net1, net2, x)
-        inf_time = inf_time + time.time() - temp
-        u = f1[0] + 1 / (i+1) * f2
-        u_sort, u_ind = torch.sort(u)
-        i_hat = u_sort[-1]
-        i_deg = u_sort[-2]
-        neuronal_pred = int(u_ind[-1].item())
-        
-        # add predicted rewards to the sets
-        X1_train.append(x)
-        X2_train.append(torch.reshape(dc, (1, len(dc))))
-        r_1 = torch.zeros(k).to(device)
-        r_1[y.item()] = 1
-        y1.append(r_1) 
-        y2.append((r_1 - f1)[0])
+        for i in ind:
+            x, y = train_dataset[i]
+            x = x.view(1, -1).to(device)
 
-        # update unlabeled set
-        queried_rows.append(ind)
-
-        if j % 100 == 0:
-        # update the model
             temp = time.time()
-            train_NN_batch(net1, X1_train, y1, num_epochs=num_epochs, lr=lr)
-            train_NN_batch(net2, X2_train, y2, num_epochs=num_epochs, lr=lr)
-            train_time = train_time + time.time() - temp
+            f1, f2, dc = EE_forward(net1, net2, x, dataset_name)
+            f1 = f1[0]
+            inf_time = inf_time + time.time() - temp
+            u = f1[0] + 1 / (i+1) * f2
+            u_sort, u_ind = torch.sort(u)
+            u_sort = u_sort[0]
+            u_ind = u_ind[0]
+            i_hat = u_sort[-1]
+            i_deg = u_sort[-2]
+            neuronal_pred = int(u_ind[-1].item())
+            
+            # add predicted rewards to the sets
+            X1_train.append(x)
+            X2_train.append(torch.reshape(dc, (1, len(dc))))
+            r_1 = torch.zeros(k).to(device)
+            r_1[y.item()] = 1
+            y1.append(r_1) 
+            y2.append((r_1 - f1)[0])
+
+            # update unlabeled set
+            queried_rows.append(i)
+
+        # update the model
+        temp = time.time()
+        train_NN_batch(net1, X1_train, y1, dataset_name, dc=False, num_epochs=num_epochs, lr=lr)
+        train_NN_batch(net2, X2_train, y2, dataset_name, dc=True, num_epochs=num_epochs, lr=lr)
+        train_time = train_time + time.time() - temp
 
         # calculate testing regret
         if j % 100 == 0:
@@ -212,10 +252,12 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
 
                 # predict via NeurONAL
                 temp = time.time()
-                f1, f2, dc = EE_forward(net1, net2, x)
+                f1, f2, dc = EE_forward(net1, net2, x, dataset_name)
                 inf_time = inf_time + time.time() - temp
                 u = f1[0] + 1 / (i+1) * f2
                 u_sort, u_ind = torch.sort(u)
+                u_sort = u_sort[0]
+                u_ind = u_ind[0]
                 i_hat = u_sort[-1]
                 i_deg = u_sort[-2]
                 neuronal_pred = int(u_ind[-1].item())

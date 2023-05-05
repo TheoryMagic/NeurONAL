@@ -1,3 +1,4 @@
+sampling one a round:
 testing acc for round 0: 0.5157
 testing acc for round 100: 0.6037
 testing acc for round 200: 0.7108
@@ -28,3 +29,44 @@ testing acc for round 2600: 0.8658
 testing acc for round 2700: 0.8715
 testing acc for round 2800: 0.874
 testing acc for round 2900: 0.8694
+
+
+trainign every 100 and training in batches:
+testing acc for round 0: 0.5157
+testing acc for round 100: 0.6279
+testing acc for round 200: 0.6548
+testing acc for round 300: 0.6357
+testing acc for round 400: 0.6449
+testing acc for round 500: 0.6971
+testing acc for round 600: 0.7033
+testing acc for round 700: 0.7066
+testing acc for round 800: 0.7052
+testing acc for round 900: 0.726
+testing acc for round 1000: 0.7306
+testing acc for round 1100: 0.7159
+testing acc for round 1200: 0.7285
+testing acc for round 1300: 0.7141
+testing acc for round 1400: 0.7418
+testing acc for round 1500: 0.7547
+testing acc for round 1600: 0.7651
+testing acc for round 1700: 0.7439
+testing acc for round 1800: 0.7504
+testing acc for round 1900: 0.749
+testing acc for round 2000: 0.7589
+testing acc for round 2100: 0.7624
+testing acc for round 2200: 0.7676
+testing acc for round 2300: 0.7579
+testing acc for round 2400: 0.7691
+testing acc for round 2500: 0.7644
+testing acc for round 2600: 0.7736
+testing acc for round 2700: 0.7841
+testing acc for round 2800: 0.7844
+testing acc for round 2900: 0.777
+
+
+
+
+resnet:
+
+testing acc for round 0: 0.5055
+testing acc for round 100: 0.6134
