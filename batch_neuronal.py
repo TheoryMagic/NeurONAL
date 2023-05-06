@@ -278,7 +278,6 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
 
 
 device = 'cuda'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 random.seed(42)
 np.random.seed(42)
 torch.manual_seed(42)
