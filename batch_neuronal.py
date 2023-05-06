@@ -200,7 +200,7 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
             else:
                 distribution.append(0)
         #distribution = [ if x != i_hat else 0 for x in range(len(weights))]
-        distribution[i_hat] = 1 - sum(distribution)
+        distribution[i_hat] = max(1 - sum(distribution), 0)
         #weights = [w/s for w in weights]
 
         # sample from distribution
@@ -239,39 +239,40 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
         train_NN_batch(net2, X2_train, y2, dataset_name, dc=True, num_epochs=num_epochs, lr=lr)
         train_time = train_time + time.time() - temp
 
-        # calculate testing regret
-        if j % 100 == 0:
-            current_acc = 0
-            for i in tqdm(range(len(test_dataset))):
-                # load data point
-                try:
-                    x, y = test_dataset[i]
-                except:
-                    break
-                x = x.view(1, -1).to(device)
+        # calculate testing regret        
+        current_acc = 0
+        for i in tqdm(range(len(test_dataset))):
+            # load data point
+            try:
+                x, y = test_dataset[i]
+            except:
+                break
+            x = x.view(1, -1).to(device)
 
-                # predict via NeurONAL
-                temp = time.time()
-                f1, f2, dc = EE_forward(net1, net2, x, dataset_name)
-                inf_time = inf_time + time.time() - temp
-                u = f1[0] + 1 / (i+1) * f2
-                u_sort, u_ind = torch.sort(u)
-                u_sort = u_sort[0]
-                u_ind = u_ind[0]
-                i_hat = u_sort[-1]
-                i_deg = u_sort[-2]
-                neuronal_pred = int(u_ind[-1].item())
+            # predict via NeurONAL
+            temp = time.time()
+            f1, f2, dc = EE_forward(net1, net2, x, dataset_name)
+            inf_time = inf_time + time.time() - temp
+            u = f1[0] + 1 / (i+1) * f2
+            u_sort, u_ind = torch.sort(u)
+            u_sort = u_sort[0]
+            u_ind = u_ind[0]
+            i_hat = u_sort[-1]
+            i_deg = u_sort[-2]
+            neuronal_pred = int(u_ind[-1].item())
 
-                lbl = y.item()
-                if neuronal_pred == lbl:
-                    current_acc += 1
-            
-            testing_acc = current_acc / len(test_dataset)
-            
-            print(f'testing acc for round {j}: {testing_acc}')
-            f = open(f"results/{dataset_name}/batch_neuronal_res.txt", 'a')
-            f.write(f'testing acc for round {j}: {testing_acc}\n')
-            f.close()
+            lbl = y.item()
+            if neuronal_pred == lbl:
+                current_acc += 1
+        
+        testing_acc = current_acc / len(test_dataset)
+        
+        print(f'testing acc for round {j}: {testing_acc}')
+        f = open(f"results/{dataset_name}/batch_neuronal_res.txt", 'a')
+        f.write(f'testing acc for round {j}: {testing_acc}\n')
+        f.close()
+
+        j += 100
 
     return inf_time, train_time, test_inf_time
 
