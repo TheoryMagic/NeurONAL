@@ -14,26 +14,42 @@ from models import CNNnet, MLP, ResNet18, ResNet10, VGG11, CNNAvgPool
 from skimage.measure import block_reduce
 from load_data_addon import Bandit_multi
 
+# Upgraded Model
+
+def init_resnet(hidden_dim, k):
+    model = ResNet18(hidden_dim, k)
+
+    model.MSE = 0
+    model.best_test_acc = 0
+    model.prev_best_test_acc = 0
+    model.better_than_prev_epochs = 0
+    model.current_round_epochs = 0
+    model.train_converge_epochs = 0
+    model.device = 'cuda'
+    model.cuda()
+
+    return model
+
 class Network_exploitation(nn.Module):
     def __init__(self, dim, hidden_size=100, k=10):
         super(Network_exploitation, self).__init__()
-        self.fc1 = nn.Linear(dim, hidden_size)
+        self.fc1 = init_resnet(dim, hidden_size)
         self.activate = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, k)
+        self.fc2 = init_resnet(hidden_size, k)
 
-    def forward(self, x):
-        return self.fc2(self.activate(self.fc1(x)))
+    def forward(self, x, dataset, dc):
+        return self.fc2(self.activate(self.fc1(x, dataset, dc, False)), dataset, dc, True)
     
     
 class Network_exploration(nn.Module):
     def __init__(self, dim, hidden_size=100, k=10):
         super(Network_exploration, self).__init__()
-        self.fc1 = nn.Linear(dim, hidden_size)
+        self.fc1 = init_resnet(dim, hidden_size)
         self.activate = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, k)
+        self.fc2 = init_resnet(hidden_size, k)
 
-    def forward(self, x):
-        return self.fc2(self.activate(self.fc1(x)))
+    def forward(self, x, dataset, dc):
+        return self.fc2(self.activate(self.fc1(x, dataset, dc, False)), dataset, dc, True)
 
 class MLP(nn.Module):
     def __init__(self, input_dim, hidden_size=100, k=10):
@@ -89,24 +105,6 @@ def train_NN_batch(model, X, Y, dataset, dc, num_epochs=10, lr=0.0001, batch_siz
 
     return batch_loss / num
 
-# Upgraded Model
-
-def init_resnet(k):
-    model = ResNet18(k)
-
-    model.MSE = 0
-    model.best_test_acc = 0
-    model.prev_best_test_acc = 0
-    model.better_than_prev_epochs = 0
-    model.current_round_epochs = 0
-    model.train_converge_epochs = 0
-    print("\n# params:{}.\n".format(model.count_parameters()))
-
-    model.device = 'cuda'
-    model.cuda()
-
-    return model
-
 # Training/Testing script
 
 def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, test=1, begin=0, lr=0.0001):
@@ -135,10 +133,10 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
     test_dataset = TensorDataset(torch.tensor(test_x.astype(np.float32)), torch.tensor(test_y.astype(np.int64)))
 
     k = len(set(Y))
-    #net1 = Network_exploitation(X.shape[1], k=k).to(device)
-    net1 = init_resnet(k)
-    #net2 = Network_exploration(explore_size, k=k).to(device)
-    net2 = init_resnet(k)
+    net1 = Network_exploitation(X.shape[1], k=k).to(device)
+    #net1 = init_resnet(k)
+    net2 = Network_exploration(explore_size, k=k).to(device)
+    #net2 = init_resnet(k)
 
     X1_train, X2_train, y1, y2 = [], [], [], []
     budget = int(n * budget)

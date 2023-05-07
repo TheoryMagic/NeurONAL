@@ -69,3 +69,7 @@ testing acc for round 2900: 0.777
 resnet:
 
 testing acc for round 0: 0.6369
+testing acc for round 0: 0.5958
+testing acc for round 1: 0.5836
+testing acc for round 2: 0.601
+testing acc for round 3: 0.5916

@@ -222,13 +222,14 @@ def hook_fn(grad):
     return grad
 
 class ResNet(nn.Module): # (BasicBlock, [2, 2, 2, 2])
-    def __init__(self, block, num_blocks, num_classes=10):
+    def __init__(self, block, num_blocks, hidden_dim, num_classes=10):
         super(ResNet, self).__init__()
         self.in_planes = 64
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3,
                                stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
+        self.layer0 = self._make_layer(block, hidden_dim, num_blocks[0], stride=1)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
@@ -240,6 +241,8 @@ class ResNet(nn.Module): # (BasicBlock, [2, 2, 2, 2])
         self.compute_LogitLoss = LogitLoss()
 
         self.embDim = 512*block.expansion
+
+        self.hidden_dim = hidden_dim
 
     def get_embedding_dim(self):
         return self.embDim
@@ -253,12 +256,15 @@ class ResNet(nn.Module): # (BasicBlock, [2, 2, 2, 2])
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, x, dataset, dc):
-        x = self.get_embedding(x, dataset, dc)
+    def forward(self, x, dataset, dc, hidden):
+        x = self.get_embedding(x, dataset, dc, hidden)
         x = self.predict(x)
         return x
 
-    def reshape_tensor(self, x, dataset):
+    def reshape_tensor(self, x, dataset, hidden):
+        if hidden:
+            x = x.reshape((1, 1, 10, 10))
+            return x
         if dataset in ['letter', 'fashion']:
             x = x.reshape((1, 1, 28, 28))
         elif dataset == 'covertype':
@@ -271,15 +277,18 @@ class ResNet(nn.Module): # (BasicBlock, [2, 2, 2, 2])
             x = x.reshape((1, 1, 2, 5))
         return x
     
-    def reshape_dc(self, x, dataset):
-        x = x.reshape((1, 1, 1, x.shape[0]))
+    def reshape_dc(self, x, hidden):
+        if hidden:
+            x = x.reshape((1, 1, 1, x.shape[1]))
+        else:
+            x = x.reshape((1, 1, 1, x.shape[0]))
         return x
 
-    def get_embedding(self, x, dataset, dc):
+    def get_embedding(self, x, dataset, dc, hidden):
         if dc:
-            x = self.reshape_dc(x, dataset)
+            x = self.reshape_dc(x, hidden)
         else:
-            x = self.reshape_tensor(x, dataset)
+            x = self.reshape_tensor(x, dataset, hidden)
         x = torch.nn.functional.interpolate(x, size=(32, 32), mode='bilinear', align_corners=False)
         x = x.unsqueeze(1).repeat(1, 3, 1, 1, 1)
         x = x.squeeze(2)
@@ -287,6 +296,7 @@ class ResNet(nn.Module): # (BasicBlock, [2, 2, 2, 2])
         handle = x.register_hook(hook_fn)
         out = F.relu(self.bn1(self.conv1(x)))
         handle.remove()
+        out = self.layer0(out)
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
@@ -502,8 +512,8 @@ class VGG(nn.Module):
 def ResNet10():
     return ResNet(BasicBlock, [3, 1, 3, 1])
 
-def ResNet18(k):
-    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=k)
+def ResNet18(hidden_dim, k):
+    return ResNet(BasicBlock, [2, 2, 2, 2], hidden_dim, num_classes=k)
 
 
 def ResNet34():
