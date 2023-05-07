@@ -51,7 +51,7 @@ def run(i, args):
     f.write(f'{num_rounds}, {datasets[i]}, {inf_time}, {train_time}, {test_inf_time}\n')
     f.close()
 
-num_rounds = 10000
+num_rounds = 1000
 num_test = num_rounds
 datasets = ['letter', 'covertype', 'MagicTelescope', 'shuttle', 'adult', 'fashion']
 in_es = [3079, 1350, 44, 128, 416, 15377]

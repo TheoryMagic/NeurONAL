@@ -74,7 +74,7 @@ def EE_forward(net1, net2, x, dataset):
     f2 = net2(dc, dataset, dc=True)
     return f1, f2, dc
 
-def train_NN_batch(model, X, Y, dataset, dc, num_epochs=10, lr=0.0001, batch_size=64, num_batch=4):
+def train_NN_batch(model, X, Y, dataset, dc, num_epochs=100, lr=0.0001, batch_size=128, num_batch=4):
     model.train()
     X = torch.cat(X).float()
     Y = torch.stack(Y).float().detach()
@@ -143,8 +143,8 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
     inf_time = 0
     train_time = 0
     test_inf_time = 0
-    R = 3000
-    batch_size = 1000
+    R = 300
+    batch_size = 50
     num_epochs = 20
 
     mu = n
@@ -152,7 +152,7 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
 
     
     queried_rows = []
-    for j in range(R):
+    while j < R:
         weights = []
         indices = []
         for i in tqdm(range(n)):
@@ -202,7 +202,7 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
         #weights = [w/s for w in weights]
 
         # sample from distribution
-        ind = choice(a=indices, size=100, p=distribution)
+        ind = choice(a=indices, size=batch_size, p=distribution)
 
         for i in ind:
             x, y = train_dataset[i]
@@ -233,8 +233,8 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
 
         # update the model
         temp = time.time()
-        train_NN_batch(net1, X1_train, y1, dataset_name, dc=False, num_epochs=num_epochs, lr=lr)
-        train_NN_batch(net2, X2_train, y2, dataset_name, dc=True, num_epochs=num_epochs, lr=lr)
+        train_NN_batch(net1, X1_train, y1, dataset_name, dc=False, lr=lr)
+        train_NN_batch(net2, X2_train, y2, dataset_name, dc=True, lr=lr)
         train_time = train_time + time.time() - temp
 
         # calculate testing regret        
@@ -270,7 +270,7 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
         f.write(f'testing acc for round {j}: {testing_acc}\n')
         f.close()
 
-        j += 100
+        j += batch_size
 
     return inf_time, train_time, test_inf_time
 
