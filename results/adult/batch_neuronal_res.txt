@@ -1,0 +1,10 @@
+testing acc for round 0: 0.7584
+testing acc for round 1: 0.7601
+testing acc for round 2: 0.7879
+testing acc for round 3: 0.7942
+testing acc for round 4: 0.6762
+testing acc for round 5: 0.7806
+testing acc for round 6: 0.7951
+testing acc for round 7: 0.7935
+testing acc for round 8: 0.7671
+testing acc for round 9: 0.7966
