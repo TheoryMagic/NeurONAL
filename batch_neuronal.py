@@ -152,6 +152,7 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
 
     
     queried_rows = []
+    j = 0
     while j < R:
         weights = []
         indices = []
