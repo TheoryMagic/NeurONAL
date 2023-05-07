@@ -1,0 +1,24 @@
+testing acc for round 0: 0.922
+
+
+testing acc for round 0: 0.8735
+testing acc for round 1: 0.9557
+testing acc for round 2: 0.9134
+testing acc for round 3: 0.8945
+testing acc for round 4: 0.9077
+testing acc for round 5: 0.9127
+testing acc for round 6: 0.6474
+testing acc for round 7: 0.8703
+testing acc for round 8: 0.8665
+testing acc for round 9: 0.851
+testing acc for round 10: 0.8673
+testing acc for round 11: 0.8741
+testing acc for round 12: 0.5914
+testing acc for round 13: 0.826
+testing acc for round 14: 0.6996
+testing acc for round 15: 0.7751
+testing acc for round 16: 0.8374
+testing acc for round 17: 0.8416
+
+
+two-layer resnet:
