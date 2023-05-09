@@ -1,0 +1,15 @@
+testing acc for round 0: 0.7943
+testing acc for round 100: 0.7943
+testing acc for round 200: 0.8355
+testing acc for round 300: 0.8132
+testing acc for round 400: 0.8265
+testing acc for round 500: 0.8867
+testing acc for round 600: 0.8482
+testing acc for round 700: 0.8725
+testing acc for round 800: 0.911
+testing acc for round 900: 0.9105
+testing acc for round 1000: 0.9193
+testing acc for round 1100: 0.9477
+testing acc for round 1200: 0.9204
+testing acc for round 1300: 0.9211
+testing acc for round 1400: 0.9636

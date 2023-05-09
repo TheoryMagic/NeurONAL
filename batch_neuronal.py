@@ -10,13 +10,13 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 from models import CNNnet, MLP, ResNet18, ResNet10, VGG11, CNNAvgPool
-
+import pickle
 from skimage.measure import block_reduce
 from load_data_addon import Bandit_multi
 
 # Upgraded Model
 
-def init_resnet(hidden_dim, k):
+def init_resnet(dev, hidden_dim, k):
     model = ResNet18(hidden_dim, k)
 
     model.MSE = 0
@@ -25,28 +25,29 @@ def init_resnet(hidden_dim, k):
     model.better_than_prev_epochs = 0
     model.current_round_epochs = 0
     model.train_converge_epochs = 0
-    model.device = 'cuda'
+    model.device = f'cuda:{dev}'
+    os.environ['CUDA_VISIBLE_DEVICES'] = dev
     model.cuda()
 
     return model
 
 class Network_exploitation(nn.Module):
-    def __init__(self, dim, hidden_size=100, k=10):
+    def __init__(self, dev, dim, hidden_size=100, k=10):
         super(Network_exploitation, self).__init__()
-        self.fc1 = init_resnet(dim, hidden_size)
+        self.fc1 = init_resnet(dev, dim, hidden_size)
         self.activate = nn.ReLU()
-        self.fc2 = init_resnet(hidden_size, k)
+        self.fc2 = init_resnet(dev, hidden_size, k)
 
     def forward(self, x, dataset, dc):
         return self.fc2(self.activate(self.fc1(x, dataset, dc, False)), dataset, dc, True)
     
     
 class Network_exploration(nn.Module):
-    def __init__(self, dim, hidden_size=100, k=10):
+    def __init__(self, dev, dim, hidden_size=100, k=10):
         super(Network_exploration, self).__init__()
-        self.fc1 = init_resnet(dim, hidden_size)
+        self.fc1 = init_resnet(dev, dim, hidden_size)
         self.activate = nn.ReLU()
-        self.fc2 = init_resnet(hidden_size, k)
+        self.fc2 = init_resnet(dev, hidden_size, k)
 
     def forward(self, x, dataset, dc):
         return self.fc2(self.activate(self.fc1(x, dataset, dc, False)), dataset, dc, True)
@@ -74,7 +75,7 @@ def EE_forward(net1, net2, x, dataset):
     f2 = net2(dc, dataset, dc=True)
     return f1, f2, dc
 
-def train_NN_batch(model, X, Y, dataset, dc, num_epochs=100, lr=0.0001, batch_size=128, num_batch=4):
+def train_NN_batch(model, X, Y, dataset, dc, num_epochs=64, lr=0.0001, batch_size=128, num_batch=4):
     model.train()
     X = torch.cat(X).float()
     Y = torch.stack(Y).float().detach()
@@ -107,7 +108,7 @@ def train_NN_batch(model, X, Y, dataset, dc, num_epochs=100, lr=0.0001, batch_si
 
 # Training/Testing script
 
-def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, test=1, begin=0, lr=0.0001):
+def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, test=1, begin=0, lr=0.0001, j=0):
     data = Bandit_multi(dataset_name)
     X = data.X
     Y = data.y
@@ -133,9 +134,9 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
     test_dataset = TensorDataset(torch.tensor(test_x.astype(np.float32)), torch.tensor(test_y.astype(np.int64)))
 
     k = len(set(Y))
-    net1 = Network_exploitation(X.shape[1], k=k).to(device)
+    net1 = Network_exploitation(dev, X.shape[1], k=k).to(device)
     #net1 = init_resnet(k)
-    net2 = Network_exploration(explore_size, k=k).to(device)
+    net2 = Network_exploration(dev, explore_size, k=k).to(device)
     #net2 = init_resnet(k)
 
     X1_train, X2_train, y1, y2 = [], [], [], []
@@ -143,16 +144,28 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
     inf_time = 0
     train_time = 0
     test_inf_time = 0
-    R = 300
-    batch_size = 50
-    num_epochs = 20
+    R = 3000
+    batch_size = 100
 
     mu = n
     gamma = 300
+    queried_rows = []
+
+    files = [filename for filename in os.listdir('.') if filename.startswith(f"{dataset_name}_y1")]
+    if len(files) > 0:
+        net1.load_state_dict(torch.load(f'{dataset_name}_net1_{j}.pt'))
+        net2.load_state_dict(torch.load(f'{dataset_name}_net2_{j}.pt'))
+
+        X1_train = torch.load(f'{dataset_name}_x1_train_{j}.pk')
+        X2_train = torch.load(f'{dataset_name}_x2_train_{j}.pk')
+        y1 = torch.load(f'{dataset_name}_y1_{j}.pk')
+        y2 = torch.load(f'{dataset_name}_y2_{j}.pk')
+        queried_rows = torch.load(f'{dataset_name}_queried_rows_{j}.pt')
+
+        print(f'loaded from prev state j={j}')
 
     
-    queried_rows = []
-    j = 0
+    
     while j < R:
         weights = []
         indices = []
@@ -272,6 +285,19 @@ def run(n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype",
         f.close()
 
         j += batch_size
+
+        torch.save(net1.state_dict(), f'{dataset_name}_net1_{j}.pt')
+        torch.save(net2.state_dict(), f'{dataset_name}_net2_{j}.pt')
+
+        torch.save(X1_train, f'{dataset_name}_x1_train_{j}.pk')
+        torch.save(X2_train, f'{dataset_name}_x2_train_{j}.pk')
+        torch.save(y1, f'{dataset_name}_y1_{j}.pk')
+        torch.save(y2, f'{dataset_name}_y2_{j}.pk')
+
+        torch.save(queried_rows, f'{dataset_name}_queried_rows_{j}.pt')
+
+
+        
 
     return inf_time, train_time, test_inf_time
 
