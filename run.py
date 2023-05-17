@@ -1,7 +1,7 @@
 from margin import run as run_margin
 from i_neural import run as run_ineural
 from neuronal_stream import run as run_stream
-from neuronl_pool import run as run_pool
+from neuronal_pool import run as run_pool
 from neual_ntk import run as run_ntk
 from alps import run as run_alps
 import argparse
