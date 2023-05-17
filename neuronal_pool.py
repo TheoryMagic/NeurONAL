@@ -14,43 +14,35 @@ import pickle
 from skimage.measure import block_reduce
 from load_data_addon import Bandit_multi
 
-# Upgraded Model
-
-def init_resnet(dev, hidden_dim, k):
-    model = ResNet18(hidden_dim, k)
-
-    model.MSE = 0
-    model.best_test_acc = 0
-    model.prev_best_test_acc = 0
-    model.better_than_prev_epochs = 0
-    model.current_round_epochs = 0
-    model.train_converge_epochs = 0
-    model.device = f'cuda:{dev}'
-    os.environ['CUDA_VISIBLE_DEVICES'] = dev
-    model.cuda()
-
-    return model
-
+# Model
 class Network_exploitation(nn.Module):
     def __init__(self, dev, dim, hidden_size=100, k=10):
         super(Network_exploitation, self).__init__()
-        self.fc1 = init_resnet(dev, dim, hidden_size)
+        self.fc1 = nn.Linear(dim, hidden_size)
         self.activate = nn.ReLU()
-        self.fc2 = init_resnet(dev, hidden_size, k)
+        self.fc2 = nn.Linear(hidden_size, k)
 
-    def forward(self, x, dataset, dc):
-        return self.fc2(self.activate(self.fc1(x, dataset, dc, False)), dataset, dc, True)
+        self.device = f'cuda:{dev}'
+        os.environ['CUDA_VISIBLE_DEVICES'] = dev
+        self.cuda()
+
+    def forward(self, x):
+        return self.fc2(self.activate(self.fc1(x)))
     
     
 class Network_exploration(nn.Module):
     def __init__(self, dev, dim, hidden_size=100, k=10):
         super(Network_exploration, self).__init__()
-        self.fc1 = init_resnet(dev, dim, hidden_size)
+        self.fc1 = nn.Linear(dim, hidden_size)
         self.activate = nn.ReLU()
-        self.fc2 = init_resnet(dev, hidden_size, k)
+        self.fc2 = nn.Linear(hidden_size, k)
 
-    def forward(self, x, dataset, dc):
-        return self.fc2(self.activate(self.fc1(x, dataset, dc, False)), dataset, dc, True)
+        self.device = f'cuda:{dev}'
+        os.environ['CUDA_VISIBLE_DEVICES'] = dev
+        self.cuda()
+
+    def forward(self, x):
+        return self.fc2(self.activate(self.fc1(x)))
 
 class MLP(nn.Module):
     def __init__(self, input_dim, hidden_size=100, k=10):
@@ -65,17 +57,16 @@ class MLP(nn.Module):
 def EE_forward(net1, net2, x, dataset):
 
     x.requires_grad = True
-    f1 = net1(x, dataset, dc=False)
+    f1 = net1(x)
     net1.zero_grad()
     f1.sum().backward(retain_graph=True)
     dc = torch.cat([p.grad.flatten().detach() for p in net1.parameters()])
-    #dc = dc / torch.linalg.norm(dc)
     dc = block_reduce(dc.cpu(), block_size=51, func=np.mean)
     dc = torch.from_numpy(dc).to(x.device)
-    f2 = net2(dc, dataset, dc=True)
+    f2 = net2(dc)
     return f1, f2, dc
 
-def train_NN_batch(model, X, Y, dataset, dc, num_epochs=64, lr=0.0001, batch_size=128, num_batch=4):
+def train_NN_batch(model, X, Y, dataset, dc, num_epochs=64, lr=0.0005, batch_size=256, num_batch=4):
     model.train()
     X = torch.cat(X).float()
     Y = torch.stack(Y).float().detach()
@@ -92,7 +83,8 @@ def train_NN_batch(model, X, Y, dataset, dc, num_epochs=64, lr=0.0001, batch_siz
             for i in index:
                 x, y = X[i].to(device), Y[i].to(device)
                 y = torch.reshape(y, (1,-1))
-                pred = model(x, dataset, dc).view(-1)
+                #HEREpred = model(x, dataset, dc).view(-1)
+                pred = model(x)
 
                 optimizer.zero_grad()
                 loss = torch.mean((pred - y) ** 2)
@@ -108,7 +100,7 @@ def train_NN_batch(model, X, Y, dataset, dc, num_epochs=64, lr=0.0001, batch_siz
 
 # Training/Testing script
 
-def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, test=1, begin=0, lr=0.0001, j=0):
+def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, begin=0, lr=0.0001, j=0):
     data = Bandit_multi(dataset_name)
     X = data.X
     Y = data.y
@@ -124,10 +116,6 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
 
     test_x = data.X[n:]
     test_y = data.y[n:]
-
-    if len(test_x) > n:
-        test_x = test_x[:n]
-        test_y = test_y[:n]
     test_y = np.array(test_y)
     test_y = (test_y.astype(np.int64) - begin)
     
@@ -135,22 +123,17 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
 
     k = len(set(Y))
     net1 = Network_exploitation(dev, X.shape[1], k=k).to(device)
-    #net1 = init_resnet(k)
     net2 = Network_exploration(dev, explore_size, k=k).to(device)
-    #net2 = init_resnet(k)
 
     X1_train, X2_train, y1, y2 = [], [], [], []
     budget = int(n * budget)
     inf_time = 0
     train_time = 0
     test_inf_time = 0
-    R = 3000
+    R = 1000
     batch_size = 100
 
-    mu = n
-    gamma = 300
-    queried_rows = []
-
+    # Load previous state if applicable
     files = [filename for filename in os.listdir('.') if filename.startswith(f"{dataset_name}_y1")]
     if len(files) > 0:
         net1.load_state_dict(torch.load(f'{dataset_name}_net1_{j}.pt'))
@@ -164,8 +147,17 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
 
         print(f'loaded from prev state j={j}')
 
+
+    mu = 1000
+    gamma = 1000
     
-    
+    X1_train, X2_train, y1, y2 = [], [], [], []
+    queried_rows = []
+    j = 0
+    net1 = Network_exploitation(dev, X.shape[1], k=k).to(device)
+    net2 = Network_exploration(dev, explore_size, k=k).to(device)
+
+
     while j < R:
         weights = []
         indices = []
@@ -182,12 +174,9 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
             # predict via NeurONAL
             temp = time.time()
             f1, f2, dc = EE_forward(net1, net2, x, dataset_name)
-            f1 = f1[0]
             inf_time = inf_time + time.time() - temp
             u = f1[0] + 1 / (i+1) * f2
             u_sort, u_ind = torch.sort(u)
-            u_sort = u_sort[0]
-            u_ind = u_ind[0]
             i_hat = u_sort[-1]
             i_deg = u_sort[-2]
             neuronal_pred = int(u_ind[-1].item())
@@ -205,18 +194,16 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
         for x in range(len(weights)):
             if x != i_hat:
                 quotient = (mu * w_hat + gamma * (weights[x] - w_hat))
-                if quotient == 0:
-                    print(f'mu = {mu}, w_hat = {w_hat}, weights[x] = {weights[x]} and x = {x}')
-                    quotient = 0.00000001
                 distribution.append((w_hat / quotient))
             else:
                 distribution.append(0)
-        #distribution = [ if x != i_hat else 0 for x in range(len(weights))]
         distribution[i_hat] = max(1 - sum(distribution), 0)
-        #weights = [w/s for w in weights]
+
+        total = sum(distribution)
+        distribution = [w/total for w in distribution]
 
         # sample from distribution
-        ind = choice(a=indices, size=batch_size, p=distribution)
+        ind = np.random.choice(indices, size=batch_size, replace=False, p=distribution)
 
         for i in ind:
             x, y = train_dataset[i]
@@ -224,12 +211,9 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
 
             temp = time.time()
             f1, f2, dc = EE_forward(net1, net2, x, dataset_name)
-            f1 = f1[0]
             inf_time = inf_time + time.time() - temp
             u = f1[0] + 1 / (i+1) * f2
             u_sort, u_ind = torch.sort(u)
-            u_sort = u_sort[0]
-            u_ind = u_ind[0]
             i_hat = u_sort[-1]
             i_deg = u_sort[-2]
             neuronal_pred = int(u_ind[-1].item())
@@ -251,9 +235,9 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
         train_NN_batch(net2, X2_train, y2, dataset_name, dc=True, lr=lr)
         train_time = train_time + time.time() - temp
 
-        # calculate testing regret        
+        # calculate testing regret   
         current_acc = 0
-        for i in tqdm(range(len(test_dataset))):
+        for i in tqdm(range(n)):
             # load data point
             try:
                 x, y = test_dataset[i]
@@ -267,8 +251,6 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
             inf_time = inf_time + time.time() - temp
             u = f1[0] + 1 / (i+1) * f2
             u_sort, u_ind = torch.sort(u)
-            u_sort = u_sort[0]
-            u_ind = u_ind[0]
             i_hat = u_sort[-1]
             i_deg = u_sort[-2]
             neuronal_pred = int(u_ind[-1].item())
@@ -277,15 +259,15 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
             if neuronal_pred == lbl:
                 current_acc += 1
         
-        testing_acc = current_acc / len(test_dataset)
+        testing_acc = current_acc / n
+        j += batch_size
         
-        print(f'testing acc for round {j}: {testing_acc}')
-        f = open(f"results/{dataset_name}/batch_neuronal_res.txt", 'a')
-        f.write(f'testing acc for round {j}: {testing_acc}\n')
+        print(f'testing acc after {j} queries: {testing_acc}')
+        f = open(f"results/{dataset_name}/NeurONAL_pool_res.txt", 'a')
+        f.write(f'testing acc after {j} queries: {testing_acc}\n')
         f.close()
 
-        j += batch_size
-
+        # Save current model training progress
         torch.save(net1.state_dict(), f'{dataset_name}_net1_{j}.pt')
         torch.save(net2.state_dict(), f'{dataset_name}_net2_{j}.pt')
 
@@ -296,8 +278,41 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
 
         torch.save(queried_rows, f'{dataset_name}_queried_rows_{j}.pt')
 
-
         
+    # Calculating the STD for testing acc
+    for _ in range(4):
+        test_ind = np.arange(len(test_dataset))
+        np.random.shuffle(test_ind)
+        test_ind = test_ind[:n]
+        current_acc = 0
+        for i in tqdm(test_ind):
+            # load data point
+            try:
+                x, y = test_dataset[i]
+            except:
+                break
+            x = x.view(1, -1).to(device)
+
+            # predict via NeurONAL
+            temp = time.time()
+            f1, f2, dc = EE_forward(net1, net2, x, dataset_name)
+            inf_time = inf_time + time.time() - temp
+            u = f1[0] + 1 / (i+1) * f2
+            u_sort, u_ind = torch.sort(u)
+            i_hat = u_sort[-1]
+            i_deg = u_sort[-2]
+            neuronal_pred = int(u_ind[-1].item())
+
+            lbl = y.item()
+            if neuronal_pred == lbl:
+                current_acc += 1
+        
+        testing_acc = current_acc / len(test_ind)
+        
+        print(f'testing acc after {j} queries: {testing_acc}')
+        f = open(f"results/{dataset_name}/NeurONAL_pool_res.txt", 'a')
+        f.write(f'testing acc after {j} queries: {testing_acc}\n')
+        f.close()
 
     return inf_time, train_time, test_inf_time
 

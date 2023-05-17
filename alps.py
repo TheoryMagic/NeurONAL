@@ -187,7 +187,7 @@ class MLP(nn.Module):
 
 
 
-def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=1):
+def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
     random.seed(42)
     np.random.seed(42)
     torch.manual_seed(42)
@@ -330,41 +330,33 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', test=1):
         f.close()
 
 
-    if test > 0:
-        print('-------TESTING-------')
-        lim = min(n, len(dataset)-n)
-        for _ in range(5):
-            acc = 0
-            for i in range(n, n+lim):
-                ind = random.randint(n, len(dataset)-1)
-                xn, yn = dataset[ind]
-                xn = xn.view(1, -1).to(device)
-                yn = yn.view(-1).float().to(device)
-                temp = time.time()
-                if i == 0:
-                    hn = H_class[0]
-                else:
-                    hn = learn(H_class, set_S, set_T, num_model=num_model, model_info=model_info, model=model)[0]
-                test_inf_time = test_inf_time + time.time() - temp
+    print('-------TESTING-------')
+    lim = min(n, len(dataset)-n)
+    for _ in range(5):
+        acc = 0
+        for i in range(n, n+lim):
+            ind = random.randint(n, len(dataset)-1)
+            xn, yn = dataset[ind]
+            xn = xn.view(1, -1).to(device)
+            yn = yn.view(-1).float().to(device)
+            temp = time.time()
+            if i == 0:
+                hn = H_class[0]
+            else:
+                hn = learn(H_class, set_S, set_T, num_model=num_model, model_info=model_info, model=model)[0]
+            test_inf_time = test_inf_time + time.time() - temp
 
-                with torch.no_grad():
-                    prob = hn(xn).item()
-                    pred = int(prob >= 0.5)
-                    lbl = yn.item()
-                    if pred == lbl:
-                        acc += 1
-            print(f'Testing accuracy: {acc/lim}\n')
-            f = open(f"results/{dataset_name}/alps_res.txt", 'a')
-            f.write(f'Testing accuracy: {acc/lim}\n')
-            f.close()
-            f = open('runtimes_alps.txt', 'a')
-            f.write(f'{test_inf_time}, ')
-            f.close()
-        
-        f = open('runtimes_alps.txt', 'a')
-        f.write(f'\n')
+            with torch.no_grad():
+                prob = hn(xn).item()
+                pred = int(prob >= 0.5)
+                lbl = yn.item()
+                if pred == lbl:
+                    acc += 1
+        print(f'Testing accuracy: {acc/lim}\n')
+        f = open(f"results/{dataset_name}/alps_res.txt", 'a')
+        f.write(f'Testing accuracy: {acc/lim}\n')
         f.close()
-    
+        
     return inf_time, train_time, test_inf_time
     
 device = 'cuda'

@@ -77,7 +77,7 @@ def train_NN_batch(model, X, Y, num_epochs=10, lr=0.0001, batch_size=64):
 
     return batch_loss / num
 
-def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, test=1, begin=0, lr=0.0001):
+def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, begin=0, lr=0.0001):
     data = Bandit_multi(dataset_name)
     X = data.X
     Y = data.y
@@ -156,40 +156,31 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
         f = open(f"results/{dataset_name}/neuronal_res.txt", 'a')
         f.write(f'{i},{query_num},{budget},{num_epochs},{current_regret}\n')
         f.close()
-
-    if test > 0:
         
-        print('-------TESTING-------')
-        lim = min(n, len(dataset)-n)
-        for _ in range(5):
-            acc = 0
-            for i in range(n, n+lim):
-                ind = random.randint(n, len(dataset)-1)
-                x, y = dataset[ind]
-                x = x.view(1, -1).to(device)
+    print('-------TESTING-------')
+    lim = min(n, len(dataset)-n)
+    for _ in range(5):
+        acc = 0
+        for i in range(n, n+lim):
+            ind = random.randint(n, len(dataset)-1)
+            x, y = dataset[ind]
+            x = x.view(1, -1).to(device)
 
-                temp = time.time()
-                f1, f2, dc = EE_forward(net1, net2, x)
-                test_inf_time = test_inf_time + time.time() - temp
-                u = f1[0] + 1 / (i+1) * f2
-                u_sort, u_ind = torch.sort(u)
-                i_hat = u_sort[-1]
-                i_deg = u_sort[-2]
-                    
-                pred = int(u_ind[-1].item())
-                lbl = y.item()
-                if pred == lbl:
-                    acc += 1
-            print(f'Testing accuracy: {acc/lim}\n')
-            f = open(f"results/{dataset_name}/neuronal_res.txt", 'a')
-            f.write(f'Testing accuracy: {acc/lim}\n')
-            f.close()
-            f = open('runtimes_neuronal.txt', 'a')
-            f.write(f'{test_inf_time}, ')
-            f.close()
-        
-        f = open('runtimes_neuronal.txt', 'a')
-        f.write(f'\n')
+            temp = time.time()
+            f1, f2, dc = EE_forward(net1, net2, x)
+            test_inf_time = test_inf_time + time.time() - temp
+            u = f1[0] + 1 / (i+1) * f2
+            u_sort, u_ind = torch.sort(u)
+            i_hat = u_sort[-1]
+            i_deg = u_sort[-2]
+                
+            pred = int(u_ind[-1].item())
+            lbl = y.item()
+            if pred == lbl:
+                acc += 1
+        print(f'Testing accuracy: {acc/lim}\n')
+        f = open(f"results/{dataset_name}/neuronal_res.txt", 'a')
+        f.write(f'Testing accuracy: {acc/lim}\n')
         f.close()
 
     return inf_time, train_time, test_inf_time
