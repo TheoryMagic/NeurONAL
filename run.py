@@ -54,10 +54,10 @@ npg_es = [1544, 208, 26, 34, 212, 1560]
 begin = [0, 1, 1, 1, 1, 0]
 
 argparser = argparse.ArgumentParser()
-argparser.add_argument('--b', help='budget percentage', default='0.3')
+argparser.add_argument('--b', help='budget percentage', default='0.1')
 argparser.add_argument('--ne', help='number of epochs', default='40')
-argparser.add_argument('--method', help='\'a\' for ALPS, \'d\' for NeuAL-NTK, \'m\' for Margin, \'i\' for I-NeurAL and \'s\' for NeurONAL-Stream, \'p\' for NeurONAL-Pool', default='p')
-argparser.add_argument('--dataset', help='-1 for all, 0-5 for Letter, Covertype, MT, Shuttle, Adult, or Fashion', default=0)
+argparser.add_argument('--method', help='\'a\' for ALPS, \'d\' for NeuAL-NTK, \'m\' for Margin, \'i\' for I-NeurAL and \'s\' for NeurONAL-Stream, \'p\' for NeurONAL-Pool', default='d')
+argparser.add_argument('--dataset', help='-1 for all, 0-5 for Letter, Covertype, MT, Shuttle, Adult, or Fashion', default=5)
 argparser.add_argument('--j', help='Last checkpoint number saved', default=0)
 argparser.add_argument('--dev', help='GPU device number', default='3')
 args = argparser.parse_args()

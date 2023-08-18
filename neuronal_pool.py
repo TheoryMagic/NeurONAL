@@ -136,14 +136,14 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
     # Load previous state if applicable
     files = [filename for filename in os.listdir('.') if filename.startswith(f"{dataset_name}_y1")]
     if len(files) > 0:
-        net1.load_state_dict(torch.load(f'{dataset_name}_net1_{j}.pt'))
-        net2.load_state_dict(torch.load(f'{dataset_name}_net2_{j}.pt'))
+        net1.load_state_dict(torch.load(f'params/{dataset_name}_net1_{j}.pt'))
+        net2.load_state_dict(torch.load(f'params/{dataset_name}_net2_{j}.pt'))
 
-        X1_train = torch.load(f'{dataset_name}_x1_train_{j}.pk')
-        X2_train = torch.load(f'{dataset_name}_x2_train_{j}.pk')
-        y1 = torch.load(f'{dataset_name}_y1_{j}.pk')
-        y2 = torch.load(f'{dataset_name}_y2_{j}.pk')
-        queried_rows = torch.load(f'{dataset_name}_queried_rows_{j}.pt')
+        X1_train = torch.load(f'params/{dataset_name}_x1_train_{j}.pk')
+        X2_train = torch.load(f'params/{dataset_name}_x2_train_{j}.pk')
+        y1 = torch.load(f'params/{dataset_name}_y1_{j}.pk')
+        y2 = torch.load(f'params/{dataset_name}_y2_{j}.pk')
+        queried_rows = torch.load(f'params/{dataset_name}_queried_rows_{j}.pt')
 
         print(f'loaded from prev state j={j}')
 
@@ -157,7 +157,7 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
     net1 = Network_exploitation(dev, X.shape[1], k=k).to(device)
     net2 = Network_exploration(dev, explore_size, k=k).to(device)
 
-
+    total_time = 0
     while j < R:
         weights = []
         indices = []
@@ -191,6 +191,7 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
         i_hat = np.argmin(weights)
         w_hat = weights[i_hat]
         distribution = []
+        temp = time.time()
         for x in range(len(weights)):
             if x != i_hat:
                 quotient = (mu * w_hat + gamma * (weights[x] - w_hat))
@@ -201,6 +202,7 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
 
         total = sum(distribution)
         distribution = [w/total for w in distribution]
+        inf_time = time.time() - temp
 
         # sample from distribution
         ind = np.random.choice(indices, size=batch_size, replace=False, p=distribution)
@@ -263,20 +265,20 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
         j += batch_size
         
         print(f'testing acc after {j} queries: {testing_acc}')
-        f = open(f"results/{dataset_name}/NeurONAL_pool_res.txt", 'a')
+        f = open(f"results_np/{dataset_name}/NeurONAL_pool_res.txt", 'a')
         f.write(f'testing acc after {j} queries: {testing_acc}\n')
         f.close()
 
         # Save current model training progress
-        torch.save(net1.state_dict(), f'{dataset_name}_net1_{j}.pt')
-        torch.save(net2.state_dict(), f'{dataset_name}_net2_{j}.pt')
+        torch.save(net1.state_dict(), f'params/{dataset_name}_net1_{j}.pt')
+        torch.save(net2.state_dict(), f'params/{dataset_name}_net2_{j}.pt')
 
-        torch.save(X1_train, f'{dataset_name}_x1_train_{j}.pk')
-        torch.save(X2_train, f'{dataset_name}_x2_train_{j}.pk')
-        torch.save(y1, f'{dataset_name}_y1_{j}.pk')
-        torch.save(y2, f'{dataset_name}_y2_{j}.pk')
+        torch.save(X1_train, f'params/{dataset_name}_x1_train_{j}.pk')
+        torch.save(X2_train, f'params/{dataset_name}_x2_train_{j}.pk')
+        torch.save(y1, f'params/{dataset_name}_y1_{j}.pk')
+        torch.save(y2, f'params/{dataset_name}_y2_{j}.pk')
 
-        torch.save(queried_rows, f'{dataset_name}_queried_rows_{j}.pt')
+        torch.save(queried_rows, f'params/{dataset_name}_queried_rows_{j}.pt')
 
         
     # Calculating the STD for testing acc
@@ -296,7 +298,7 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
             # predict via NeurONAL
             temp = time.time()
             f1, f2, dc = EE_forward(net1, net2, x, dataset_name)
-            inf_time = inf_time + time.time() - temp
+            test_inf_time = test_inf_time + time.time() - temp
             u = f1[0] + 1 / (i+1) * f2
             u_sort, u_ind = torch.sort(u)
             i_hat = u_sort[-1]
@@ -310,10 +312,12 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
         testing_acc = current_acc / len(test_ind)
         
         print(f'testing acc after {j} queries: {testing_acc}')
-        f = open(f"results/{dataset_name}/NeurONAL_pool_res.txt", 'a')
+        f = open(f"results_np/{dataset_name}/NeurONAL_pool_res.txt", 'a')
         f.write(f'testing acc after {j} queries: {testing_acc}\n')
         f.close()
 
+    with open(f'times/neuronal.txt', 'a+') as f:
+        f.write(f'NeurONAL on {dataset_name} took: {inf_time} + {train_time} = {inf_time + train_time}\n')
     return inf_time, train_time, test_inf_time
 
 

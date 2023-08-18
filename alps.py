@@ -2,7 +2,7 @@ import os
 import time
 import random
 import numpy as np
-
+import pytorch_toolkit as pytk
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -178,12 +178,64 @@ def test_model_margin(H_class, dataset):
 class MLP(nn.Module):
     def __init__(self, input_dim, hidden_size=100):
         super(MLP, self).__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_size)
-        self.activate = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, 1)
+        self.net = nn.Sequential(
+            pytk.Conv2d(1, 64, kernel_size=5, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+            # pytk.Conv2d(64, 64, kernel_size=5, padding=1),
+            # nn.ReLU(),
+            # nn.BatchNorm2d(64),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(0.20),
+
+            pytk.Conv2d(64, 128, kernel_size=5, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(128),
+            # pytk.Conv2d(128, 128, kernel_size=5, padding=1),
+            # nn.ReLU(),
+            # nn.BatchNorm2d(128),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(0.25),
+
+            pytk.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(256),
+            # pytk.Conv2d(256, 256, kernel_size=3, padding=1),
+            # nn.ReLU(),
+            # nn.BatchNorm2d(256),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(0.30),
+
+            pytk.Conv2d(256, 512, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.BatchNorm2d(512),
+            # pytk.Conv2d(512, 512, kernel_size=3, padding=1),
+            # nn.ReLU(),
+            # nn.BatchNorm2d(512),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(0.35),
+
+            nn.Flatten(),
+
+            nn.Linear(512*1*1, 512),
+            nn.ReLU(),
+            nn.Dropout(0.20),
+
+            # nn.Linear(1024, 512),
+            # nn.ReLU(),
+            # nn.Dropout(0.15),
+
+            # # nn.Linear(512, 128),
+            # # nn.ReLU(),
+            # #nn.Dropout(0.10),
+
+            nn.Linear(512, 1)     
+        )
 
     def forward(self, x):
-        return torch.sigmoid(self.fc2(self.activate(self.fc1(x))))
+        temp = int(x.flatten().shape[0] / 784)
+        ishika = x.reshape(temp, 1, 28, 28)
+        return torch.sigmoid(self.net(ishika))
 
 
 
@@ -191,7 +243,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
     random.seed(42)
     np.random.seed(42)
     torch.manual_seed(42)
-    num_model = 5
+    num_model = 100
     delta1, delta2 = 0.5, 0.5
 
     # For pred_now, we store a tuple (prob, loss0, loss1)
@@ -204,6 +256,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
     Y = data.y
     X = np.array(X)
     Y = np.array(Y)
+    Y = np.array(['0' if y in ['0', '1', '2', '3', '4'] else '1' for y in Y])
      
     if len(X.shape) == 3:
         N, h, w = X.shape
@@ -233,7 +286,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
             print(k)
 
         model = model.eval()
-        for s in [0.1, 0.25, 0.5, 0.75, 0.9]:
+        for s in [0.9, 0.09, 0.009, 0.0009, 0.00009, 0.000009, 0.0000009, 0.00000009, 0.000000009, 0.0000000009]:
             F_class.append((i, s))
             F_class_info[(i,s)] = {}
             F_class_info[(i,s)]['sum_loss'] = 0.0
@@ -325,9 +378,9 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
 
         regret.append(current_regret)
         print(f'{i},{query_num},{budget},{num_epochs},{current_regret}')
-        f = open(f"results/{dataset_name}/alps_res.txt", 'a')
-        f.write(f'{i},{query_num},{budget},{num_epochs},{current_regret}\n')
-        f.close()
+        #f = open(f"results_np/{dataset_name}/alps_res_{num_model}.txt", 'a')
+        #f.write(f'{i},{query_num},{budget},{num_epochs},{current_regret}\n')
+        #f.close()
 
 
     print('-------TESTING-------')
@@ -353,7 +406,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
                 if pred == lbl:
                     acc += 1
         print(f'Testing accuracy: {acc/lim}\n')
-        f = open(f"results/{dataset_name}/alps_res.txt", 'a')
+        f = open(f"results_np/{dataset_name}/alps_res_{num_model}_9.txt", 'a')
         f.write(f'Testing accuracy: {acc/lim}\n')
         f.close()
         

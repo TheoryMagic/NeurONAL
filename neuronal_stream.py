@@ -105,9 +105,13 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
     train_time = 0
     test_inf_time = 0
 
-    for i in range(n):
+    points = np.arange(0, n)
+
+    i = 0
+    while query_num < budget:
+        index = random.choice(np.arange(points.size))
         try:
-            x, y = dataset[i]
+            x, y = dataset[points[index]]
         except:
             break
         x = x.view(1, -1).to(device)
@@ -122,48 +126,48 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
 
         ind = 0
         if abs(i_hat - i_deg) < margin * 0.1:
+            i += 1
             ind = 1
+            points = np.delete(points, index)
 
+            #construct training set        
+            pred = int(u_ind[-1].item())
 
-        #construct training set        
-        pred = int(u_ind[-1].item())
+            lbl = y.item()
+            if pred != lbl:
+                current_regret += 1
+                reward = 0 
+            else:
+                reward = 1
 
-        lbl = y.item()
-        if pred != lbl:
-            current_regret += 1
-            reward = 0 
-        else:
-            reward = 1
+            if ind and (query_num < budget): 
+                query_num += 1
 
-        if ind and (query_num < budget): 
-            query_num += 1
+                #add predicted rewards to the sets
+                X1_train.append(x)
+                X2_train.append(torch.reshape(dc, (1, len(dc))))
+                r_1 = torch.zeros(k).to(device)
+                r_1[lbl] = 1
+                y1.append(r_1) 
+                y2.append((r_1 - f1)[0])
 
-            #add predicted rewards to the sets
-            X1_train.append(x)
-            X2_train.append(torch.reshape(dc, (1, len(dc))))
-            r_1 = torch.zeros(k).to(device)
-            r_1[lbl] = 1
-            y1.append(r_1) 
-            y2.append((r_1 - f1)[0])
-
-            temp = time.time()
-            train_NN_batch(net1, X1_train, y1, num_epochs=num_epochs, lr=lr)
-            train_NN_batch(net2, X2_train, y2, num_epochs=num_epochs, lr=lr)
-            train_time = train_time + time.time() - temp
-        
-        regret.append(current_regret)
-        print(f'{i},{query_num},{budget},{num_epochs},{current_regret}')
-        f = open(f"results/{dataset_name}/neuronal_res.txt", 'a')
-        f.write(f'{i},{query_num},{budget},{num_epochs},{current_regret}\n')
-        f.close()
+                temp = time.time()
+                train_NN_batch(net1, X1_train, y1, num_epochs=num_epochs, lr=lr)
+                train_NN_batch(net2, X2_train, y2, num_epochs=num_epochs, lr=lr)
+                train_time = train_time + time.time() - temp
+            
+            regret.append(current_regret)
+            print(f'{i},{query_num},{budget},{num_epochs},{current_regret}')
+            f = open(f"results_np/{dataset_name}/neuronal_stream.txt", 'a')
+            f.write(f'{i},{query_num},{budget},{num_epochs},{current_regret}\n')
+            f.close()
         
     print('-------TESTING-------')
-    lim = min(n, len(dataset)-n)
+    lim = 5000
     for _ in range(5):
         acc = 0
         for i in range(n, n+lim):
-            ind = random.randint(n, len(dataset)-1)
-            x, y = dataset[ind]
+            x, y = dataset[i]
             x = x.view(1, -1).to(device)
 
             temp = time.time()
@@ -179,7 +183,7 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
             if pred == lbl:
                 acc += 1
         print(f'Testing accuracy: {acc/lim}\n')
-        f = open(f"results/{dataset_name}/neuronal_res.txt", 'a')
+        f = open(f"results_np/{dataset_name}/neuronal_stream.txt", 'a')
         f.write(f'Testing accuracy: {acc/lim}\n')
         f.close()
 
