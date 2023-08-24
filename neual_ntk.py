@@ -14,27 +14,15 @@ from load_data_addon import Bandit_multi
 
 from skimage.measure import block_reduce
 def neural_forward(model, x, Z):
-    #p = model(x)
-    #model.zero_grad()
-    #max(p[0]).backward()
-    #g = torch.cat([p.grad.flatten().detach() for p in model.parameters()])
-    #sigma = gamma * g * g / Z
-    #sigma = torch.sqrt(torch.sum(sigma))
-    #u = max(p[0]).item() + sigma.item()
-
-    x.requires_grad = True
-    f1 = model(x)
+    p = model(x)
     model.zero_grad()
-    f1.sum().backward(retain_graph=True)
-    dc = torch.cat([p.grad.flatten().detach() for p in model.parameters()])
-    #dc = dc / torch.linalg.norm(dc)
-    #dc = block_reduce(dc.cpu(), block_size=51, func=np.mean)
-    #dc = torch.from_numpy(dc).to(x.device)
-    sigma = gamma * dc * dc / Z
+    p.backward()
+    g = torch.cat([p.grad.flatten().detach() for p in model.parameters()])
+    sigma = gamma * g * g / Z
     sigma = torch.sqrt(torch.sum(sigma))
-    u = max(f1[0]).item() + sigma.item()
+    u = p.item() + sigma.item()
 
-    return u, dc, sigma.item()
+    return u, g, sigma.item()
 
 def train_NN_batch(model, X, y, num_epochs=10, lr=0.001, batch_size=64):
     model.train()
@@ -70,7 +58,7 @@ class MLP(nn.Module):
         super(MLP, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_size)
         self.activate = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, 10)
+        self.fc2 = nn.Linear(hidden_size, 1)
 
     def forward(self, x):
         return self.fc2(self.activate(self.fc1(x)))
@@ -100,7 +88,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
     X = np.array(X)
     #Y = np.array(['0' if y in ['0', '1', '2', '3', '4'] else '1' for y in Y])
 
-    k = 10
+    k = len(set(Y))
 
     if len(X.shape) == 3:
         N, h, w = X.shape
