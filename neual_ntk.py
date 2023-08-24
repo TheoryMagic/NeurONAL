@@ -26,8 +26,8 @@ def neural_forward(model, x, Z):
 
 def train_NN_batch(model, X, y, num_epochs=10, lr=0.001, batch_size=64):
     model.train()
-    X = torch.cat(X).float()
-    y = torch.cat(y).float()
+    X = torch.stack(X).float()
+    y = torch.Tensor(y).float().reshape(-1, 1)
     
     optimizer = optim.Adam(model.parameters(), lr=lr)
     dataset = TensorDataset(X, y)
@@ -72,7 +72,7 @@ gamma = 0.1
 device = 'cuda'
 dataset_name = 'fashion'
 
-def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
+def run(n=1000, budget=0.3, num_epochs=10, dataset_name='covertype', begin=0):
     random.seed(42)
     np.random.seed(42)
     torch.manual_seed(42)
@@ -86,7 +86,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
     X = data.X
     Y = data.y
     X = np.array(X)
-    #Y = np.array(['0' if y in ['0', '1', '2', '3', '4'] else '1' for y in Y])
+    Y = Y.astype(np.int64) - begin
 
     k = len(set(Y))
 
@@ -98,7 +98,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
     dataset = TensorDataset(torch.tensor(X.astype(np.float32)), torch.tensor(Y.astype(np.int64)))
 
 
-    model = MLP(X.shape[1] * 2).to(device)
+    model = MLP(X.shape[1] * k).to(device)
     regret = []
     X_train, reward = [], []
     budget = int(n * budget)
@@ -116,40 +116,46 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
     for i in range(n):
         x, y = dataset[i]
         x = x.view(1, -1).to(device)
-        x0 = torch.cat([x, ci], dim=1)
-        x1 = torch.cat([ci, x], dim=1)
+        
+        arms = torch.zeros(k, k*x.shape[1]).to(device)
+        for w in range(k):
+            a = []
+            for j in range(0,w):
+                a.append(ci)
+            a.append(x)
+            for j in range(w+1,k):
+                a.append(ci)
+            arms[w]=torch.cat(a,dim=1)
 
-        temp = time.time()
-        u0, g0, sigma0 = neural_forward(model, x0, Z)
-        u1, g1, sigma1 = neural_forward(model, x1, Z)
-        inf_time = inf_time + time.time() - temp
+        g = torch.zeros(k, 68801).to(device)
+        sigma = torch.zeros(k).to(device)
+        u = torch.zeros(k).to(device)
+
+        for j in range(k):
+            temp = time.time()
+            u[j], g[j], sigma[j] = neural_forward(model, arms[j], Z)
+            inf_time = inf_time + time.time() - temp
+
+        val, idx = u.sort()
+        max_prob = torch.Tensor([val[-1], idx[-1]])
+        pred = int(max_prob[1].item())
 
         ind = 0
         lt = 0
-        if u0 > u1:
-            pred = 0
-            B = 2 * sigma0
-            if abs(u0 - 0.5) <= B:
-                ind = 1
-        else:
-            pred = 1
-            B = 2 * sigma1
-            if abs(u1 - 0.5) <= B:
-                ind = 1
+        if abs(max_prob[0].item() - 0.5) <= 2 * sigma[pred]:
+            ind = 1
 
         lbl = y.item()
+        with open('labels.txt', 'a+') as f:
+            f.write(f'pred {pred} label {lbl}\n')
         if pred != lbl:
             current_regret += 1
             lt = 1
 
         if ind and (query_num < budget): 
             query_num += 1
-            if pred == 0:
-                Z += g0 * g0
-                X_train.append(x0)
-            else:
-                Z += g1 * g1
-                X_train.append(x1)
+            Z += g[pred] * g[pred]
+            X_train.append(arms[pred])
 
             reward.append(torch.Tensor([1-lt]))
             temp = time.time()
@@ -171,18 +177,34 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
             ind = random.randint(n, len(dataset)-1)
             x, y = dataset[i]
             x = x.view(1, -1).to(device)
-            x0 = torch.cat([x, ci], dim=1)
-            x1 = torch.cat([ci, x], dim=1)
+            
+            arms = torch.zeros(k, k*x.shape[1]).to(device)
+            for w in range(k):
+                a = []
+                for j in range(0,w):
+                    a.append(ci)
+                a.append(x)
+                for j in range(w+1,k):
+                    a.append(ci)
+                arms[w]=torch.cat(a,dim=1)
 
-            temp = time.time()
-            u0, g0, sigma0 = neural_forward(model, x0, Z)
-            u1, g1, sigma1 = neural_forward(model, x1, Z)
-            test_inf_time = test_inf_time + time.time() - temp
+            g = torch.zeros(k, 68801).to(device)
+            sigma = torch.zeros(k).to(device)
+            u = torch.zeros(k).to(device)
 
-            if u0 > u1:
-                pred = 0
-            else:
-                pred = 1
+            for j in range(k):
+                temp = time.time()
+                u[j], g[j], sigma[j] = neural_forward(model, arms[j], Z)
+                inf_time = inf_time + time.time() - temp
+
+            val, idx = u.sort()
+            max_prob = torch.Tensor([val[-1], idx[-1]])
+            pred = int(max_prob[1].item())
+
+            ind = 0
+            lt = 0
+            if abs(max_prob[0].item() - 0.5) <= 2 * sigma[pred]:
+                ind = 1
 
             lbl = y.item()
             if pred == lbl:
