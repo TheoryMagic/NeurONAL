@@ -27,10 +27,11 @@ def train_cls_batch(model, X, y, num_epochs=10, lr=0.001, batch_size=64):
         batch_loss = 0.0
         for x, y in dataloader:
             x, y = x.to(device), y.to(device)
+            y = torch.reshape(y, (-1,))
             pred = model(x).view(-1)
 
-            loss = loss_fn(pred, y)
             optimizer.zero_grad()
+            loss = torch.mean((pred - y) ** 2) # TODO: CHANGE TO BCELOSS
             loss.backward()
             optimizer.step()
 
@@ -48,7 +49,7 @@ def learn(H, S, T, cur_label=None, num_model=20, model_info=None, model=None):
             continue
         if cur_label is not None:
             prob = pred_now[j][0]
-            pred = int(prob >= 0.5)
+            pred = torch.argmax(prob)
             if pred != cur_label:
                 continue
 
@@ -79,13 +80,15 @@ def calc_p(F_class, y):
     loss_list = []
     
     for j, score in F_class:
-        prob, loss0, loss1 = pred_now[j]
+        prob_all, losses = pred_now[j]
+        prob = torch.max(prob_all)
         # requester function return 0
         if abs(prob - 0.5) * 2 >= score:
-            if y == 0:
-                loss = loss0 
-            else:
-                loss = loss1
+            loss = losses[y].item()
+            #if y == 0:
+            #    loss = loss0 
+            #else:
+            #    loss = loss1
         else:
             loss = 0
         loss_list.append(loss)
@@ -97,7 +100,7 @@ def calc_r(S, yhat, F_class, model_info):
     for j, score in F_class:
         if model_info[j]['consistent']:
             prob = pred_now[j][0]
-            pred = int(prob >= 0.5)
+            pred = torch.argmax(prob)
             if pred != yhat:
                 continue
             if score < mini_score:
@@ -108,37 +111,43 @@ def calc_r(S, yhat, F_class, model_info):
                     rn = 1
     return rn
 
-def update_xn(H_class, xn, label0 ,label1):
+def update_xn(H_class, xn, num_classes):
     global pred_now
     pred_now = []
     loss_fn = nn.BCELoss().to(device)
     with torch.no_grad():
         for model in H_class:
             prob = model(xn).view(-1)
-            l0 = loss_fn(prob, label0).item()
-            l1 = loss_fn(prob, label1).item()
-            pred_now.append((prob.item(), l0, l1))
+            loss = []
+            for i in range(num_classes):
+                y = torch.zeros((num_classes,)).to(device)
+                y[i] = 1
+                loss.append(torch.mean((prob - y) ** 2))
+            pred_now.append((prob, loss))
 
 def update_set(H_class, F_class, p, yn, flag='S', model_info=None, F_class_info=None):
     for i, model in enumerate(H_class):
-        prob = pred_now[i][0]
-        if yn == 0:
-            loss = pred_now[i][1]
-        else:
-            loss = pred_now[i][2]
+        prob, losses = pred_now[i]
+        loss = losses[int(yn)].item()
+        #if yn == 0:
+        #    loss = pred_now[i][1]
+        #else:
+        #    loss = pred_now[i][2]
         if flag == 'S':
-            pred = int(prob >= 0.5)
+            pred = torch.argmax(prob)
             if pred != yn:
                 model_info[i]['consistent'] = False
         model_info[i]['sum_loss'] += loss
     
     if p != 0:
         for j, score in F_class:
-            prob = pred_now[j][0]
-            if yn == 0:
-                loss = pred_now[j][1]
-            else:
-                loss = pred_now[j][2]
+            prob_all, losses = pred_now[j]
+            prob = torch.max(prob_all)
+            loss = losses[int(yn)].item()
+            #if yn == 0:
+            #    loss = pred_now[j][1]
+            #else:
+            #    loss = pred_now[j][2]
             # not request
             if abs(prob - 0.5) * 2 >= score:
                 F_class_info[(j, score)]['sum_loss'] += loss * p
@@ -176,8 +185,18 @@ def test_model_margin(H_class, dataset):
             print("Margin:{:.2f}".format(tot_margin / 100))
 
 class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_size=100):
+    def __init__(self, input_dim, hidden_size=100, k=7):
         super(MLP, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_size)
+        self.activate = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_size, k)
+
+    def forward(self, x):
+        return self.fc2(self.activate(self.fc1(x)))
+
+class VisionMLP(nn.Module):
+    def __init__(self, input_dim, hidden_size=100):
+        super(VisionMLP, self).__init__()
         self.net = nn.Sequential(
             pytk.Conv2d(1, 64, kernel_size=5, padding=1),
             nn.ReLU(),
@@ -239,7 +258,7 @@ class MLP(nn.Module):
 
 
 
-def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
+def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', begin=1):
     random.seed(42)
     np.random.seed(42)
     torch.manual_seed(42)
@@ -256,7 +275,8 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
     Y = data.y
     X = np.array(X)
     Y = np.array(Y)
-    Y = np.array(['0' if y in ['0', '1', '2', '3', '4'] else '1' for y in Y])
+    Y = Y.astype(np.int64) - begin
+    num_classes = len(set(Y))
      
     if len(X.shape) == 3:
         N, h, w = X.shape
@@ -268,7 +288,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
     set_S, set_T = [], []
     query_num = 0
     budget = int(n * budget)
-    pre_X, pre_Y = get_pretrain(dataset_name, budget, X, Y)
+    pre_X, pre_Y = get_pretrain(dataset_name, budget, X, Y, num_classes)
     tf = time.time()
     F_class, H_class = [], []
     inf_time = 0
@@ -278,7 +298,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
 
     for i in range(num_model):
         torch.manual_seed(42+i)
-        model = MLP(X.shape[1]).to(device)
+        model = MLP(X.shape[1], k=num_classes).to(device)
         for k in range(budget):
             temp = time.time()
             train_cls_batch(model, pre_X[:k+1, :], pre_Y[:k+1], num_epochs=num_epochs)
@@ -318,16 +338,27 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
         inf_time = inf_time + time.time() - temp
 
         with torch.no_grad():
-            prob = hn(xn).item()
-            pred = int(prob >= 0.5)
+            prob = hn(xn)
+            pred = torch.argmax(prob).item()
             lbl = yn.item()
             if pred != lbl:
                 current_regret += 1
-        update_xn(H_class, xn, label0, label1)
+        update_xn(H_class, xn, num_classes)
         
-        h0, err0 = learn(H_class, set_S, set_T, 0, num_model, model_info, model)
-        h1, err1 = learn(H_class, set_S, set_T, 1, num_model, model_info, model)
-        assert h0 is not None or h1 is not None
+        h = []
+        err = []
+        none_h = True
+        for w in range(num_classes):
+            h_w, err_w = learn(H_class, set_S, set_T, w, num_model, model_info, model)
+            h.append(h_w)
+            err.append(err_w)
+            if h_w != None:
+                none_h = False
+        if none_h:
+            for w in range(num_classes):
+                h_w, err_w = learn(H_class, set_S, set_T, w, num_model, model_info, model)
+            
+        assert not none_h
         
         if len(set_T) > 0:
             F_class = shrink(p_list, set_T, F_class, F_class_info, delta1)
@@ -340,9 +371,14 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
         else:
             p = Q.item() * 1.0 / p
         
-        # emp_err0, emp_err1 = calc_emp_error(h0, set_S + set_T), calc_emp_error(h1, set_S + set_T)
-        if (h0 is None or err0 - err1 > delta2) and Q == 0:
-            rn = calc_r(set_S, 1, F_class, model_info)
+        from operator import itemgetter
+        indices, err_sort = zip(*sorted(enumerate(err), key=itemgetter(1)))
+
+        h0, h1, err1, err0 = None, None, None, None
+
+        if (abs(err_sort[-1] - err_sort[-2]) > delta2) and Q == 0:
+            ind = indices[-2] if err_sort[-1] > err_sort[-2] else indices[-1]
+            rn = calc_r(set_S, ind, F_class, model_info)
             if rn == 1:
                 query_num += 1
                 set_T.append(yn.item())
@@ -351,17 +387,6 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
             else:
                 set_S.append(1)
                 update_flag, update_y = 'S', 1
-
-        elif (h1 is None or err1 - err0 > delta2) and Q == 0:
-            rn = calc_r(set_S, 0, F_class, model_info)
-            if rn == 1:
-                query_num += 1
-                set_T.append(yn.item())
-                update_flag, update_y = 'T', yn.item()
-                p_list.append(p)
-            else:
-                set_S.append(0)
-                update_flag, update_y = 'S', 0
         else:
             query_num += 1
             set_T.append(yn.item())
@@ -378,9 +403,9 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
 
         regret.append(current_regret)
         print(f'{i},{query_num},{budget},{num_epochs},{current_regret}')
-        #f = open(f"results_np/{dataset_name}/alps_res_{num_model}.txt", 'a')
-        #f.write(f'{i},{query_num},{budget},{num_epochs},{current_regret}\n')
-        #f.close()
+        f = open(f"results_np/{dataset_name}/alps_res.txt", 'a')
+        f.write(f'{i},{query_num},{budget},{num_epochs},{current_regret}\n')
+        f.close()
 
 
     print('-------TESTING-------')
@@ -400,13 +425,13 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype'):
             test_inf_time = test_inf_time + time.time() - temp
 
             with torch.no_grad():
-                prob = hn(xn).item()
-                pred = int(prob >= 0.5)
+                prob = hn(xn)
+                pred = torch.argmax(prob)
                 lbl = yn.item()
                 if pred == lbl:
                     acc += 1
         print(f'Testing accuracy: {acc/lim}\n')
-        f = open(f"results_np/{dataset_name}/alps_res_{num_model}_9.txt", 'a')
+        f = open(f"results_np/{dataset_name}/alps_res.txt", 'a')
         f.write(f'Testing accuracy: {acc/lim}\n')
         f.close()
         

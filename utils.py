@@ -253,7 +253,7 @@ def get_data(dataset_name):
     Y = Y[index]
     return X, Y
 
-def get_pretrain(dataset_name, num_sample=360, X=0, Y=0):
+def get_pretrain(dataset_name, num_sample=360, X=0, Y=0, num_classes=0):
     index = np.arange(X.shape[0])
     np.random.seed(42)
     np.random.shuffle(index)
@@ -264,13 +264,14 @@ def get_pretrain(dataset_name, num_sample=360, X=0, Y=0):
     Y = Y[index]
     n = X.shape[0]
 
-    pre_X, pre_Y = np.zeros([num_sample, X.shape[1]]), np.zeros([num_sample])
+    pre_X, pre_Y = np.zeros([num_sample, X.shape[1]]), np.zeros([num_sample, num_classes])
     num = 0
     for i in range(n):
         q = random.random()
         if q > 0.9 and num < num_sample:
             pre_X[num, :] = X[i, :]
-            pre_Y[num] = Y[i]
+            pre_Y[num] = np.zeros(num_classes)
+            pre_Y[num][Y[i]] = 1
             num += 1
 
     return pre_X, pre_Y
