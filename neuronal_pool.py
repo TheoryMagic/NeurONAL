@@ -100,7 +100,7 @@ def train_NN_batch(model, X, Y, dataset, dc, num_epochs=64, lr=0.0005, batch_siz
 
 # Training/Testing script
 
-def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, begin=0, lr=0.0001, j=0):
+def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", explore_size=0, begin=0, lr=0.0001, j=0, mu=1000, gamma=1000):
     data = Bandit_multi(dataset_name)
     X = data.X
     Y = data.y
@@ -146,10 +146,6 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
         queried_rows = torch.load(f'params/{dataset_name}_queried_rows_{j}.pt')
 
         print(f'loaded from prev state j={j}')
-
-
-    mu = 1000
-    gamma = 1000
     
     X1_train, X2_train, y1, y2 = [], [], [], []
     queried_rows = []
@@ -312,7 +308,7 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
         testing_acc = current_acc / len(test_ind)
         
         print(f'testing acc after {j} queries: {testing_acc}')
-        f = open(f"results_np/{dataset_name}/NeurONAL_pool_res.txt", 'a')
+        f = open(f"results/{dataset_name}/NeurONAL_pool_res.txt", 'a')
         f.write(f'testing acc after {j} queries: {testing_acc}\n')
         f.close()
 

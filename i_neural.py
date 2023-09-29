@@ -98,7 +98,7 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
     net1 = Network_exploitation(X.shape[1] * k).to(device)
     net2 = Network_exploration(explore_size).to(device)
     X1_train, X2_train, y1, y2 = [], [], [], []
-    budget = int(n * budget)
+    num_labels = int(n * budget)
     current_regret = 0.0
     query_num = 0
     ci = torch.zeros(1, X.shape[1]).to(device)
@@ -154,7 +154,7 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
         else:
             reward = 1
 
-        if ind and (query_num < budget): 
+        if ind and (query_num < num_labels): 
             query_num += 1
 
             #add predicted rewards to the sets
@@ -170,9 +170,9 @@ def run(n=1000, margin=6, budget=0.05, num_epochs=10, dataset_name="covertype", 
             train_NN_batch(net2, X2_train, y2, num_epochs=num_epochs, lr=lr)
             train_time = train_time + time.time() - temp
         regret.append(current_regret)
-        print(f'{i},{query_num},{budget},{num_epochs},{current_regret}')
+        print(f'{i},{query_num},{num_labels},{num_epochs},{current_regret}')
         f = open(f"results/{dataset_name}/ineural_res.txt", 'a')
-        f.write(f'{i},{query_num},{budget},{num_epochs},{current_regret}\n')
+        f.write(f'{i},{query_num},{num_labels},{num_epochs},{current_regret}\n')
         f.close()
 
 

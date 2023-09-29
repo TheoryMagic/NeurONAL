@@ -262,7 +262,7 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', begin=1):
     random.seed(42)
     np.random.seed(42)
     torch.manual_seed(42)
-    num_model = 100
+    num_model = 150
     delta1, delta2 = 0.5, 0.5
 
     # For pred_now, we store a tuple (prob, loss0, loss1)
