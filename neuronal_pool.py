@@ -132,20 +132,6 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
     test_inf_time = 0
     R = 1000
     batch_size = 100
-
-    # Load previous state if applicable
-    files = [filename for filename in os.listdir('.') if filename.startswith(f"{dataset_name}_y1")]
-    if len(files) > 0:
-        net1.load_state_dict(torch.load(f'params/{dataset_name}_net1_{j}.pt'))
-        net2.load_state_dict(torch.load(f'params/{dataset_name}_net2_{j}.pt'))
-
-        X1_train = torch.load(f'params/{dataset_name}_x1_train_{j}.pk')
-        X2_train = torch.load(f'params/{dataset_name}_x2_train_{j}.pk')
-        y1 = torch.load(f'params/{dataset_name}_y1_{j}.pk')
-        y2 = torch.load(f'params/{dataset_name}_y2_{j}.pk')
-        queried_rows = torch.load(f'params/{dataset_name}_queried_rows_{j}.pt')
-
-        print(f'loaded from prev state j={j}')
     
     X1_train, X2_train, y1, y2 = [], [], [], []
     queried_rows = []
@@ -264,18 +250,6 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
         f = open(f"results_np/{dataset_name}/NeurONAL_pool_res.txt", 'a')
         f.write(f'testing acc after {j} queries: {testing_acc}\n')
         f.close()
-
-        # Save current model training progress
-        torch.save(net1.state_dict(), f'params/{dataset_name}_net1_{j}.pt')
-        torch.save(net2.state_dict(), f'params/{dataset_name}_net2_{j}.pt')
-
-        torch.save(X1_train, f'params/{dataset_name}_x1_train_{j}.pk')
-        torch.save(X2_train, f'params/{dataset_name}_x2_train_{j}.pk')
-        torch.save(y1, f'params/{dataset_name}_y1_{j}.pk')
-        torch.save(y2, f'params/{dataset_name}_y2_{j}.pk')
-
-        torch.save(queried_rows, f'params/{dataset_name}_queried_rows_{j}.pt')
-
         
     # Calculating the STD for testing acc
     for _ in range(4):
