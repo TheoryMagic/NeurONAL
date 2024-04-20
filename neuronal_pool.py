@@ -83,7 +83,6 @@ def train_NN_batch(model, X, Y, dataset, dc, num_epochs=64, lr=0.0005, batch_siz
             for i in index:
                 x, y = X[i].to(device), Y[i].to(device)
                 y = torch.reshape(y, (1,-1))
-                #HEREpred = model(x, dataset, dc).view(-1)
                 pred = model(x)
 
                 optimizer.zero_grad()
