@@ -252,7 +252,7 @@ def run(dev, n=10000, margin=6, budget=0.05, num_epochs=10, dataset_name="covert
         f.close()
         
     # Calculating the STD for testing acc
-    for _ in range(4):
+    for _ in range(10):
         test_ind = np.arange(len(test_dataset))
         np.random.shuffle(test_ind)
         test_ind = test_ind[:n]

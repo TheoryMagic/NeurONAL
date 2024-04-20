@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
+from tqdm import tqdm
 
 from utils import get_data, get_pretrain
 from load_data_addon import Bandit_multi
@@ -303,7 +304,6 @@ def run(n=1000, budget=0.05, num_epochs=10, dataset_name='covertype', begin=1):
             temp = time.time()
             train_cls_batch(model, pre_X[:k+1, :], pre_Y[:k+1], num_epochs=num_epochs)
             train_time = train_time + time.time() - temp
-            print(k)
 
         model = model.eval()
         for s in [0.9, 0.09, 0.009, 0.0009, 0.00009, 0.000009, 0.0000009, 0.00000009, 0.000000009, 0.0000000009]:
